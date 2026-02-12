@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin — Lumos Portal</title>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=Lilita+One&display=swap" rel="stylesheet">
+  <style>
+    :root { --bg:#f0f4ff; --surface:#fff; --surface-2:#f7f8fc; --border:#e0e4ef; --text:#1e293b; --text-muted:#64748b; --accent:#6366f1; --teacher:#7c3aed; --danger:#dc2626; --radius:12px; }
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family:'Nunito',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+    .top { background:var(--surface); border-bottom:1px solid var(--border); padding:12px 24px; display:flex; align-items:center; justify-content:space-between; }
+    .top h1 { font-family:'Lilita One',cursive; font-size:1.3rem; }
+    .top a { color:var(--accent); font-weight:700; text-decoration:none; }
+    .tabs { display:flex; gap:4px; padding:16px 24px 0; border-bottom:1px solid var(--border); background:var(--surface); }
+    .tabs button { padding:10px 18px; border:none; background:none; border-radius:8px 8px 0 0; font-weight:700; font-size:.9rem; cursor:pointer; color:var(--text-muted); }
+    .tabs button.active { background:var(--bg); color:var(--accent); }
+    .panel { display:none; padding:24px; max-width:1000px; }
+    .panel.active { display:block; }
+    .card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:20px; margin-bottom:16px; }
+    .card h2 { font-size:1rem; margin-bottom:12px; color:var(--teacher); }
+    label { display:block; font-size:.72rem; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px; }
+    input, select, textarea { width:100%; padding:9px 12px; border:1.5px solid var(--border); border-radius:8px; font-family:inherit; font-size:.9rem; margin-bottom:12px; }
+    .row { display:flex; gap:12px; flex-wrap:wrap; }
+    .row > * { flex:1; min-width:160px; }
+    button.btn { background:var(--accent); color:#fff; border:none; padding:9px 18px; border-radius:8px; font-weight:700; cursor:pointer; font-size:.85rem; }
+    button.btn.secondary { background:var(--surface-2); color:var(--text); border:1px solid var(--border); }
+    button.btn.danger { background:var(--danger); }
+    table { width:100%; border-collapse:collapse; font-size:.85rem; }
+    th, td { padding:10px 12px; text-align:left; border-bottom:1px solid var(--border); }
+    th { font-weight:700; color:var(--text-muted); font-size:.72rem; text-transform:uppercase; }
+    .badge { display:inline-block; padding:2px 8px; border-radius:20px; font-size:.7rem; font-weight:800; }
+    .badge.student { background:#e0e7ff; color:var(--accent); }
+    .badge.teacher { background:#ede9fe; color:var(--teacher); }
+    .badge.admin { background:#fce7f3; color:#be185d; }
+    .msg { padding:10px 12px; border-radius:8px; margin-bottom:12px; display:none; }
+    .msg.show { display:block; }
+    .msg.ok { background:#dcfce7; color:#166534; }
+    .msg.err { background:#fef2f2; color:#b91c1c; }
+    .actions { display:flex; gap:6px; flex-wrap:wrap; }
+    textarea.bulk { min-height:120px; font-family:monospace; font-size:.8rem; }
+  </style>
+</head>
+<body>
+  <div class="top">
+    <h1>🔧 Lumos Admin</h1>
+    <a href="/portal.html">← Portal</a> <a href="/login.html" onclick="logout(); return false;">Log out</a>
+  </div>
+  <div class="tabs">
+    <button type="button" class="active" data-tab="users">Users</button>
+    <button type="button" data-tab="upload">Upload Students</button>
+    <button type="button" data-tab="who">WHO Documentation</button>
+  </div>
+
+  <div id="panel-users" class="panel active">
+    <div class="msg" id="msg-users"></div>
+    <div class="card">
+      <h2>Add single user</h2>
+      <div class="row">
+        <div><label>Email</label><input type="email" id="newEmail" placeholder="student@example.com"></div>
+        <div><label>Password</label><input type="password" id="newPassword" placeholder="••••••"></div>
+        <div><label>Name</label><input type="text" id="newName" placeholder="Full name"></div>
+        <div><label>Role</label><select id="newRole"><option value="student">Student</option><option value="teacher">Teacher</option><option value="admin">Admin</option></select></div>
+        <div><label>Group</label><input type="text" id="newGroup" placeholder="Group 1"></div>
+      </div>
+      <button type="button" class="btn" onclick="addUser()">Add user</button>
+    </div>
+    <div class="card">
+      <h2>All users</h2>
+      <table>
+        <thead><tr><th>Email</th><th>Name</th><th>Role</th><th>Group</th><th>Actions</th></tr></thead>
+        <tbody id="usersTable"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="panel-upload" class="panel">
+    <div class="msg" id="msg-upload"></div>
+    <div class="card">
+      <h2>Bulk upload students (CSV)</h2>
+      <p style="font-size:.85rem;color:var(--text-muted);margin-bottom:12px;">One row per student. Columns: email, name (optional), group (optional). Header row optional.</p>
+      <label>Default password for new accounts</label>
+      <input type="text" id="bulkPassword" value="changeme123" placeholder="changeme123">
+      <label>Paste CSV (email, name, group)</label>
+      <textarea class="bulk" id="bulkCsv" placeholder="student1@school.edu, Alice, Group 1&#10;student2@school.edu, Bob, Group 1"></textarea>
+      <button type="button" class="btn" onclick="bulkUpload()">Upload</button>
+    </div>
+  </div>
+
+  <div id="panel-who" class="panel">
+    <div class="msg" id="msg-who"></div>
+    <div class="card">
+      <h2>WHO documentation records</h2>
+      <table>
+        <thead><tr><th>Student</th><th>Group</th><th>Status</th><th>Notes</th></tr></thead>
+        <tbody id="whoTable"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:100;align-items:center;justify-content:center;">
+    <div class="card" style="max-width:400px;margin:16px;">
+      <h2 id="modalTitle">User</h2>
+      <div id="modalBody"></div>
+      <div style="display:flex;gap:8px;margin-top:12px;">
+        <button type="button" class="btn" id="modalConfirm">Save</button>
+        <button type="button" class="btn secondary" onclick="closeModal()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const api = path => fetch('/api/admin' + path, { credentials: 'same-origin' });
+    const apiPost = (path, body) => fetch('/api/admin' + path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify(body) });
+    const apiPatch = (path, body) => fetch('/api/admin' + path, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify(body) });
+
+    function showMsg(panelId, ok, text) {
+      const el = document.getElementById('msg-' + panelId);
+      el.textContent = text;
+      el.className = 'msg show ' + (ok ? 'ok' : 'err');
+      setTimeout(() => el.classList.remove('show'), 4000);
+    }
+
+    document.querySelectorAll('.tabs button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
+        if (btn.dataset.tab === 'users') loadUsers();
+        if (btn.dataset.tab === 'who') loadWho();
+      });
+    });
+
+    async function loadUsers() {
+      const res = await api('/users');
+      if (!res.ok) { showMsg('users', false, 'Failed to load users'); return; }
+      const users = await res.json();
+      const tbody = document.getElementById('usersTable');
+      tbody.innerHTML = users.map(u => `
+        <tr>
+          <td>${escapeHtml(u.email)}</td>
+          <td>${escapeHtml(u.name)}</td>
+          <td><span class="badge ${u.role}">${u.role}</span> ${u.isTeacher ? '👩‍🏫' : ''}</td>
+          <td>${escapeHtml(u.group || '')}</td>
+          <td class="actions">
+            <button type="button" class="btn secondary" onclick="toggleTeacher('${u._id}', ${!!u.isTeacher})">${u.isTeacher ? 'Remove teacher' : 'Make teacher'}</button>
+            <button type="button" class="btn secondary" onclick="openResetPassword('${u._id}','${escapeHtml(u.email)}')">Reset password</button>
+            <button type="button" class="btn secondary" onclick="openResources('${u._id}','${escapeHtml(u.email)}', ${JSON.stringify(u.resources || {}).replace(/"/g, '&quot;')})">Resources</button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function escapeHtml(s) {
+      if (s == null) return '';
+      const div = document.createElement('div');
+      div.textContent = s;
+      return div.innerHTML;
+    }
+
+    async function addUser() {
+      const email = document.getElementById('newEmail').value.trim();
+      const password = document.getElementById('newPassword').value;
+      const name = document.getElementById('newName').value.trim();
+      const role = document.getElementById('newRole').value;
+      const group = document.getElementById('newGroup').value.trim();
+      if (!email || !password || !name) { showMsg('users', false, 'Email, password and name required'); return; }
+      const res = await apiPost('/users', { email, password, name, role, group });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { showMsg('users', false, data.error || 'Failed'); return; }
+      showMsg('users', true, 'User added');
+      document.getElementById('newEmail').value = '';
+      document.getElementById('newPassword').value = '';
+      document.getElementById('newName').value = '';
+      loadUsers();
+    }
+
+    async function bulkUpload() {
+      const csv = document.getElementById('bulkCsv').value.trim();
+      const defaultPassword = document.getElementById('bulkPassword').value.trim() || 'changeme123';
+      if (!csv) { showMsg('upload', false, 'Paste CSV data'); return; }
+      const lines = csv.split(/\r?\n/).filter(l => l.trim());
+      const students = lines.map(line => {
+        const parts = line.split(',').map(p => p.trim());
+        return { email: parts[0] || '', name: parts[1] || parts[0] || '', group: parts[2] || '' };
+      }).filter(s => s.email);
+      if (!students.length) { showMsg('upload', false, 'No valid rows'); return; }
+      const res = await apiPost('/users/bulk', { students, defaultPassword });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { showMsg('upload', false, data.error || 'Failed'); return; }
+      showMsg('upload', true, `Created ${data.created.length}, skipped ${data.skipped.length}, errors ${data.errors.length}`);
+      if (data.created.length) loadUsers();
+    }
+
+    async function toggleTeacher(id, current) {
+      const res = await apiPost('/users/' + id + '/teacher-rights', { grant: !current });
+      if (!res.ok) { showMsg('users', false, 'Failed'); return; }
+      showMsg('users', true, current ? 'Teacher rights removed' : 'Teacher rights granted');
+      loadUsers();
+    }
+
+    let modalUserId = null;
+    function openResetPassword(id, email) {
+      modalUserId = id;
+      document.getElementById('modalTitle').textContent = 'Reset password: ' + email;
+      document.getElementById('modalBody').innerHTML = '<label>New password</label><input type="password" id="modalNewPassword" placeholder="••••••">';
+      document.getElementById('modalConfirm').onclick = async () => {
+        const newPassword = document.getElementById('modalNewPassword').value;
+        if (!newPassword) return;
+        const res = await apiPost('/users/' + id + '/reset-password', { newPassword });
+        if (!res.ok) { showMsg('users', false, 'Failed'); return; }
+        closeModal();
+        showMsg('users', true, 'Password reset');
+      };
+      document.getElementById('modal').style.display = 'flex';
+    }
+
+    function openResources(id, email, resources) {
+      let r = {};
+      try {
+        if (typeof resources === 'string') r = JSON.parse(resources.replace(/&quot;/g, '"'));
+        else if (resources && typeof resources === 'object') r = resources;
+      } catch (_) {}
+      r = r || {};
+      modalUserId = id;
+      document.getElementById('modalTitle').textContent = 'Allocate resources: ' + email;
+      document.getElementById('modalBody').innerHTML = `
+        <label>Max weeks</label><input type="number" id="resMaxWeeks" value="${r.maxWeeks ?? 10}" min="1">
+        <label>Allowed stages (comma: empathize, define, ideate, prototype, test)</label><input type="text" id="resStages" value="${(r.allowedStages || []).join(', ')}" placeholder="empathize, define, ideate, prototype, test">
+        <label>Notes</label><textarea id="resNotes" rows="2">${escapeHtml(r.notes || '')}</textarea>
+      `;
+      document.getElementById('modalConfirm').onclick = async () => {
+        const maxWeeks = parseInt(document.getElementById('resMaxWeeks').value, 10) || 10;
+        const stagesStr = document.getElementById('resStages').value.trim();
+        const allowedStages = stagesStr ? stagesStr.split(',').map(s => s.trim()).filter(Boolean) : [];
+        const notes = document.getElementById('resNotes').value;
+        const res = await apiPost('/users/' + id + '/resources', { maxWeeks, allowedStages, notes });
+        if (!res.ok) { showMsg('users', false, 'Failed'); return; }
+        closeModal();
+        showMsg('users', true, 'Resources updated');
+      };
+      document.getElementById('modal').style.display = 'flex';
+    }
+
+    function closeModal() {
+      document.getElementById('modal').style.display = 'none';
+      modalUserId = null;
+    }
+
+    async function loadWho() {
+      const res = await api('/who-docs');
+      if (!res.ok) { showMsg('who', false, 'Failed to load'); return; }
+      const docs = await res.json();
+      const tbody = document.getElementById('whoTable');
+      tbody.innerHTML = docs.length ? docs.map(d => `
+        <tr>
+          <td>${escapeHtml(d.studentEmail)} ${d.studentName ? '(' + escapeHtml(d.studentName) + ')' : ''}</td>
+          <td>${escapeHtml(d.group || '')}</td>
+          <td>${escapeHtml(d.status || 'pending')}</td>
+          <td>${escapeHtml((d.notes || '').slice(0, 60))}${(d.notes && d.notes.length > 60) ? '…' : ''}</td>
+        </tr>
+      `).join('') : '<tr><td colspan="4">No WHO documentation records yet.</td></tr>';
+    }
+
+    function logout() {
+      fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' }).then(() => { window.location.href = '/login.html'; });
+    }
+
+    loadUsers();
+  </script>
+</body>
+</html>

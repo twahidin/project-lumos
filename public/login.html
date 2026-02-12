@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login — Lumos Design Thinking Portal</title>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=Lilita+One&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f0f4ff;
+      --surface: #fff;
+      --border: #e0e4ef;
+      --text: #1e293b;
+      --text-muted: #64748b;
+      --accent: #6366f1;
+      --accent-light: #e0e7ff;
+      --teacher: #7c3aed;
+      --radius: 14px;
+      --shadow: 0 4px 24px rgba(99, 102, 241, .12);
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Nunito', sans-serif;
+      min-height: 100vh;
+      background: var(--bg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .card {
+      background: var(--surface);
+      border-radius: 20px;
+      padding: 40px;
+      max-width: 400px;
+      width: 100%;
+      box-shadow: var(--shadow);
+      border: 1px solid var(--border);
+    }
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 24px;
+    }
+    .logo-icon {
+      width: 44px;
+      height: 44px;
+      background: linear-gradient(135deg, #ec4899, var(--accent), #3b82f6);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+    }
+    .logo-text {
+      font-family: 'Lilita One', cursive;
+      font-size: 1.4rem;
+      color: var(--text);
+    }
+    h1 {
+      font-size: 1.1rem;
+      color: var(--text-muted);
+      font-weight: 700;
+      margin-bottom: 20px;
+    }
+    label {
+      display: block;
+      font-size: .75rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 6px;
+    }
+    input {
+      width: 100%;
+      padding: 12px 14px;
+      border: 2px solid var(--border);
+      border-radius: 10px;
+      font-family: inherit;
+      font-size: 1rem;
+      margin-bottom: 16px;
+    }
+    input:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+    .btn {
+      width: 100%;
+      padding: 12px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-family: inherit;
+      font-weight: 700;
+      font-size: 1rem;
+      cursor: pointer;
+      margin-top: 8px;
+    }
+    .btn:hover { opacity: .92; }
+    .btn:disabled { opacity: .6; cursor: not-allowed; }
+    .error {
+      background: #fef2f2;
+      color: #b91c1c;
+      padding: 10px 12px;
+      border-radius: 8px;
+      font-size: .85rem;
+      margin-bottom: 16px;
+      display: none;
+    }
+    .error.show { display: block; }
+    .links {
+      margin-top: 20px;
+      text-align: center;
+      font-size: .9rem;
+      color: var(--text-muted);
+    }
+    .links a {
+      color: var(--accent);
+      font-weight: 700;
+      text-decoration: none;
+    }
+    .links a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">
+      <div class="logo-icon">💡</div>
+      <span class="logo-text">Lumos DT Portal</span>
+    </div>
+    <h1>Sign in</h1>
+    <div class="error" id="error"></div>
+    <form id="loginForm">
+      <label for="email">Email</label>
+      <input type="email" id="email" name="email" required placeholder="you@example.com" autocomplete="email">
+      <label for="password">Password</label>
+      <input type="password" id="password" name="password" required placeholder="••••••••" autocomplete="current-password">
+      <button type="submit" class="btn" id="submitBtn">Sign in</button>
+    </form>
+    <p class="links">
+      <a href="/portal.html">Portal</a> · <a href="/admin.html">Admin</a> (admin only)
+    </p>
+  </div>
+  <script>
+    const form = document.getElementById('loginForm');
+    const errorEl = document.getElementById('error');
+    const submitBtn = document.getElementById('submitBtn');
+
+    function showError(msg) {
+      errorEl.textContent = msg;
+      errorEl.classList.add('show');
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errorEl.classList.remove('show');
+      submitBtn.disabled = true;
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          showError(data.error || 'Login failed');
+          submitBtn.disabled = false;
+          return;
+        }
+        if (data.role === 'admin') {
+          window.location.href = '/admin.html';
+        } else {
+          window.location.href = '/portal.html';
+        }
+      } catch (err) {
+        showError('Network error. Try again.');
+        submitBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
