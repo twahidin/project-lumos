@@ -4,8 +4,8 @@ const RETRY_MS = 5000;
 const MAX_RETRIES = process.env.NODE_ENV === 'production' ? 0 : 999999; // in prod, Railway restarts so retry forever
 
 async function tryConnect(retries = 0) {
-  const uri = process.env.MONGODB_URI || 'mongodb://localhost:27017/lumos-portal';
-  const isDefault = !process.env.MONGODB_URI;
+  const uri = process.env.MONGODB_URI || process.env.MONGO_URI || process.env.MONGO_URL || 'mongodb://localhost:27017/lumos-portal';
+  const isDefault = !process.env.MONGODB_URI && !process.env.MONGO_URI && !process.env.MONGO_URL;
   try {
     await mongoose.connect(uri);
     console.log('MongoDB connected');

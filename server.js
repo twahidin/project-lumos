@@ -3,7 +3,6 @@ const express = require('express');
 const session = require('express-session');
 const MongoStore = require('connect-mongo');
 const connectDB = require('./config/db');
-const { mongoose } = require('./config/db');
 const authRoutes = require('./routes/auth');
 const adminRoutes = require('./routes/admin');
 const { requireAuth, requireAdmin } = require('./middleware/auth');
@@ -26,11 +25,15 @@ const sessionConfig = {
   }
 };
 
-// Use MongoDB for sessions (same connection as app — no MemoryStore warning, production-safe)
-sessionConfig.store = MongoStore.create({
-  mongooseConnection: mongoose.connection,
-  crypto: { secret: sessionConfig.secret }
-});
+// Use MongoDB for sessions (connect-mongo v5 requires mongoUrl). Accept MONGO_URI, MONGO_URL, or MONGODB_URI (Railway uses MONGO_URI).
+const mongoUrl = (process.env.MONGODB_URI || process.env.MONGO_URI || process.env.MONGO_URL || '').trim();
+if (mongoUrl) {
+  sessionConfig.store = MongoStore.create({
+    mongoUrl,
+    crypto: { secret: sessionConfig.secret }
+  });
+}
+
 app.use(session(sessionConfig));
 
 // Connect to MongoDB (retries in background, does not block server start)
