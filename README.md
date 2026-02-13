@@ -40,17 +40,15 @@ Design Thinking Portal with student/teacher roles, MongoDB-backed auth, and admi
 2. **Add your app** (this repo) as a service. Connect the repo or deploy from CLI.
 
 3. **Variables** (in your app service):
-   - `MONGODB_URI` — From the MongoDB service: **Variables** → copy `MONGO_URL` (or the URI Railway provides) into `MONGODB_URI` for the web service.
+   - `MONGO_URI` or `MONGODB_URI` — From the MongoDB service (Railway uses `MONGO_URI`).
    - `SESSION_SECRET` — Set a long random string for production (e.g. `openssl rand -hex 32`).
+   - **`SUPERADMIN`** and **`SUPERADMIN_PWD`** (recommended) — A fallback admin that is **not** stored in MongoDB and **cannot be changed** in the app. Log in with this email and password to always access the admin panel and create other admins. Example: `SUPERADMIN=super@lumos.edu`, `SUPERADMIN_PWD=your-secure-password`.
 
-4. **First admin**  
-   After first deploy, run the seed script once (e.g. in a one-off run or from your machine with `MONGODB_URI` set to the Railway MongoDB URL):
-   ```bash
-   MONGODB_URI="<railway-mongo-uri>" node scripts/seed-admin.js
-   ```
+4. **First admin (optional)**  
+   If you set `SUPERADMIN` / `SUPERADMIN_PWD`, you can log in immediately and create other admins from the panel. Otherwise, run the seed script once to create an admin in MongoDB (see Local development step 3).
 
 5. **Open the app**  
-   Use the generated URL (e.g. `https://your-app.up.railway.app`). Log in with the admin account, then use **Admin** to upload students and manage teachers.
+   Use the generated URL. Log in with your Super Admin credentials (or the seeded admin), then use **Admin** to upload students and manage teachers.
 
 ## Routes
 

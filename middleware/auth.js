@@ -1,13 +1,17 @@
 const User = require('../models/User');
 
 function requireAuth(req, res, next) {
-  if (!req.session?.userId) {
-    return res.redirect('/login.html');
+  if (req.session?.superAdmin || req.session?.userId) {
+    return next();
   }
-  next();
+  return res.redirect('/login.html');
 }
 
 function requireAdmin(req, res, next) {
+  if (req.session?.superAdmin) {
+    req.adminUser = { role: 'admin', email: process.env.SUPERADMIN };
+    return next();
+  }
   if (!req.session?.userId) {
     return res.redirect('/login.html');
   }
@@ -23,6 +27,10 @@ function requireAdmin(req, res, next) {
 }
 
 function requireTeacherOrAdmin(req, res, next) {
+  if (req.session?.superAdmin) {
+    req.user = { role: 'admin', isTeacher: true };
+    return next();
+  }
   if (!req.session?.userId) {
     return res.redirect('/login.html');
   }

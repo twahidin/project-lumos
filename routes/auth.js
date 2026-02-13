@@ -10,6 +10,21 @@ router.post('/login', async (req, res) => {
   if (!loginId || !password) {
     return res.status(400).json({ error: 'User ID / Email and password required' });
   }
+  // Super admin from env (cannot be changed; not stored in MongoDB)
+  const superAdmin = process.env.SUPERADMIN && String(process.env.SUPERADMIN).trim();
+  const superAdminPwd = process.env.SUPERADMIN_PWD;
+  if (superAdmin && superAdminPwd && loginId === superAdmin && password === superAdminPwd) {
+    req.session.superAdmin = true;
+    req.session.role = 'admin';
+    req.session.userId = null;
+    return res.json({
+      id: 'superadmin',
+      email: superAdmin,
+      name: 'Super Admin',
+      role: 'admin',
+      redirect: '/admin.html'
+    });
+  }
   try {
     const isEmail = loginId.includes('@');
     const user = isEmail
@@ -24,6 +39,7 @@ router.post('/login', async (req, res) => {
     }
     req.session.userId = user._id;
     req.session.role = user.role;
+    req.session.superAdmin = false;
     return res.json({
       id: user._id,
       userid: user.userid,
@@ -45,6 +61,20 @@ router.post('/logout', (req, res) => {
 
 router.get('/me', requireAuth, async (req, res) => {
   try {
+    if (req.session.superAdmin) {
+      const superAdmin = process.env.SUPERADMIN && String(process.env.SUPERADMIN).trim();
+      return res.json({
+        id: 'superadmin',
+        userid: null,
+        email: superAdmin,
+        name: 'Super Admin',
+        role: 'admin',
+        group: '',
+        members: [],
+        isTeacher: true,
+        resources: {}
+      });
+    }
     const user = await User.findById(req.session.userId)
       .select('-password');
     if (!user) {

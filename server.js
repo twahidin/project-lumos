@@ -49,7 +49,10 @@ const User = require('./models/User');
 
 function requireRole(role) {
   return async (req, res, next) => {
-    if (!req.session?.userId) return res.redirect('/login.html');
+    const loggedIn = req.session?.userId || req.session?.superAdmin;
+    if (!loggedIn) return res.redirect('/login.html');
+    if (req.session.superAdmin && role === 'admin') return next();
+    if (req.session.superAdmin) return res.redirect('/admin.html');
     try {
       const user = await User.findById(req.session.userId).select('role');
       if (!user) return res.redirect('/login.html');
@@ -66,9 +69,9 @@ function requireRole(role) {
 }
 
 app.get('/', (req, res) => {
-  if (!req.session?.userId) return res.redirect('/login.html');
-  if (req.session.role === 'admin') return res.redirect('/admin.html');
-  if (req.session.role === 'teacher') return res.redirect('/teacher.html');
+  if (!req.session?.userId && !req.session?.superAdmin) return res.redirect('/login.html');
+  if (req.session?.superAdmin || req.session?.role === 'admin') return res.redirect('/admin.html');
+  if (req.session?.role === 'teacher') return res.redirect('/teacher.html');
   res.redirect('/student.html');
 });
 
