@@ -1,12 +1,12 @@
 /**
  * One-time script to create the first admin user.
- * Run: MONGODB_URI=mongodb://... node scripts/seed-admin.js
+ * Uses same env as app: MONGODB_URI, MONGO_URI, or MONGO_URL (Railway uses MONGO_URI).
  * Or set ADMIN_EMAIL and ADMIN_PASSWORD to override defaults.
  */
 const mongoose = require('mongoose');
 const User = require('../models/User');
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/lumos-portal';
+const MONGODB_URI = process.env.MONGODB_URI || process.env.MONGO_URI || process.env.MONGO_URL || 'mongodb://localhost:27017/lumos-portal';
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@lumos.edu';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
 const ADMIN_NAME = process.env.ADMIN_NAME || 'Admin';
