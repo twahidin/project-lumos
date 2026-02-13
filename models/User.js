@@ -2,7 +2,8 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
 const userSchema = new mongoose.Schema({
-  email: { type: String, required: true, unique: true, trim: true, lowercase: true },
+  email: { type: String, trim: true, lowercase: true, sparse: true }, // optional; teachers/admins use it
+  userid: { type: String, trim: true, sparse: true }, // student login identifier; unique per student
   password: { type: String, required: true },
   name: { type: String, required: true, trim: true },
   role: { type: String, enum: ['student', 'teacher', 'admin'], default: 'student' },
@@ -17,6 +18,9 @@ const userSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });
+
+userSchema.index({ email: 1 }, { unique: true, sparse: true });
+userSchema.index({ userid: 1 }, { unique: true, sparse: true });
 
 userSchema.pre('save', async function (next) {
   if (!this.isModified('password')) return next();

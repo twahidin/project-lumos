@@ -134,15 +134,13 @@
     <h1>Sign in</h1>
     <div class="error" id="error"></div>
     <form id="loginForm">
-      <label for="email">Email</label>
-      <input type="email" id="email" name="email" required placeholder="you@example.com" autocomplete="email">
+      <label for="login">User ID or Email</label>
+      <input type="text" id="login" name="login" required placeholder="Student: user ID · Teacher/Admin: email" autocomplete="username">
       <label for="password">Password</label>
       <input type="password" id="password" name="password" required placeholder="••••••••" autocomplete="current-password">
       <button type="submit" class="btn" id="submitBtn">Sign in</button>
     </form>
-    <p class="links">
-      <a href="/portal.html">Portal</a> · <a href="/admin.html">Admin</a> (admin only)
-    </p>
+    <p class="links">Students use User ID · Teachers &amp; Admins use Email</p>
   </div>
   <script>
     const form = document.getElementById('loginForm');
@@ -158,14 +156,14 @@
       e.preventDefault();
       errorEl.classList.remove('show');
       submitBtn.disabled = true;
-      const email = document.getElementById('email').value.trim();
+      const login = document.getElementById('login').value.trim();
       const password = document.getElementById('password').value;
 
       try {
         const res = await fetch('/api/auth/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password })
+          body: JSON.stringify({ login, password })
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
@@ -173,11 +171,7 @@
           submitBtn.disabled = false;
           return;
         }
-        if (data.role === 'admin') {
-          window.location.href = '/admin.html';
-        } else {
-          window.location.href = '/portal.html';
-        }
+        window.location.href = data.redirect || '/student.html';
       } catch (err) {
         showError('Network error. Try again.');
         submitBtn.disabled = false;

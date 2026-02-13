@@ -45,30 +45,42 @@ app.use('/api/admin', adminRoutes);
 const publicDir = path.join(__dirname, 'public');
 app.use(express.static(publicDir));
 
-app.get('/', (req, res) => {
-  if (!req.session?.userId) {
-    return res.redirect('/login.html');
-  }
-  res.redirect('/portal.html');
-});
+const User = require('./models/User');
 
-app.get('/portal.html', requireAuth, (req, res) => {
-  res.sendFile(path.join(publicDir, 'portal.html'));
-});
-
-app.get('/admin.html', async (req, res) => {
-  if (!req.session?.userId) {
-    return res.redirect('/login.html');
-  }
-  const User = require('./models/User');
-  try {
-    const user = await User.findById(req.session.userId).select('role');
-    if (!user || user.role !== 'admin') {
-      return res.redirect('/portal.html');
+function requireRole(role) {
+  return async (req, res, next) => {
+    if (!req.session?.userId) return res.redirect('/login.html');
+    try {
+      const user = await User.findById(req.session.userId).select('role');
+      if (!user) return res.redirect('/login.html');
+      if (user.role !== role) {
+        if (user.role === 'admin') return res.redirect('/admin.html');
+        if (user.role === 'teacher') return res.redirect('/teacher.html');
+        return res.redirect('/student.html');
+      }
+      next();
+    } catch (_) {
+      res.redirect('/login.html');
     }
-  } catch (_) {
-    return res.redirect('/login.html');
-  }
+  };
+}
+
+app.get('/', (req, res) => {
+  if (!req.session?.userId) return res.redirect('/login.html');
+  if (req.session.role === 'admin') return res.redirect('/admin.html');
+  if (req.session.role === 'teacher') return res.redirect('/teacher.html');
+  res.redirect('/student.html');
+});
+
+app.get('/student.html', requireRole('student'), (req, res) => {
+  res.sendFile(path.join(publicDir, 'student.html'));
+});
+
+app.get('/teacher.html', requireRole('teacher'), (req, res) => {
+  res.sendFile(path.join(publicDir, 'teacher.html'));
+});
+
+app.get('/admin.html', requireRole('admin'), (req, res) => {
   res.sendFile(path.join(publicDir, 'admin.html'));
 });
 
