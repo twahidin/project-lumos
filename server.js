@@ -1,12 +1,12 @@
 const path = require('path');
 const express = require('express');
 const session = require('express-session');
+const MongoStore = require('connect-mongo');
 const connectDB = require('./config/db');
+const { mongoose } = require('./config/db');
 const authRoutes = require('./routes/auth');
 const adminRoutes = require('./routes/admin');
 const { requireAuth, requireAdmin } = require('./middleware/auth');
-
-connectDB();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -15,7 +15,7 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 const isProd = process.env.NODE_ENV === 'production';
-app.use(session({
+const sessionConfig = {
   secret: process.env.SESSION_SECRET || 'lumos-portal-secret-change-in-production',
   resave: false,
   saveUninitialized: false,
@@ -24,7 +24,17 @@ app.use(session({
     httpOnly: true,
     maxAge: 7 * 24 * 60 * 60 * 1000
   }
-}));
+};
+
+// Use MongoDB for sessions (same connection as app — no MemoryStore warning, production-safe)
+sessionConfig.store = MongoStore.create({
+  mongooseConnection: mongoose.connection,
+  crypto: { secret: sessionConfig.secret }
+});
+app.use(session(sessionConfig));
+
+// Connect to MongoDB (retries in background, does not block server start)
+connectDB();
 
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
