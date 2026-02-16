@@ -278,214 +278,69 @@
         const authRes = await fetch('/api/auth/me', { credentials: 'same-origin' });
         if (authRes.ok) {
           const me = await authRes.json();
-          const redirects = {
-            admin: '/admin.html',
-            teacher: '/teacher.html',
-            student: '/student.html'
-          };
+          const redirects = { admin: '/admin.html', teacher: '/teacher.html', student: '/student.html' };
           window.location.href = redirects[me.role] || '/student.html';
         }
       } catch (error) {
         // Not authenticated, proceed with login form
-        console.log('Not authenticated, showing login form');
       }
-    }
-
-    // Check if already logged in - redirect if session exists (fallback for local sessions)
-    function checkExistingSession() {
-      const session = localStorage.getItem('lumos-session');
-      if (session) {
-        try {
-          const sessionData = JSON.parse(session);
-          const redirects = {
-            'admin': '/admin.html',
-            'teacher': '/teacher.html',
-            'student': '/student.html'
-          };
-          const redirectUrl = redirects[sessionData.role] || '/student.html';
-          window.location.href = redirectUrl;
-        } catch (e) {
-          console.error('Error parsing session:', e);
-        }
-      }
-    }
-
-    // Seed default admin if no users exist (for development/fallback)
-    function seedDefaultAdminIfNeeded() {
-      let users = [];
-      try {
-        const stored = localStorage.getItem('lumos-users');
-        users = stored ? JSON.parse(stored) : [];
-      } catch (e) {
-        console.error('Error parsing users:', e);
-        users = [];
-      }
-
-      if (!users.length) {
-        const defaultAdmin = {
-          id: 'u_admin',
-          role: 'admin',
-          email: 'admin',
-          name: 'Admin',
-          password: 'admin123'
-        };
-        users = [defaultAdmin];
-        localStorage.setItem('lumos-users', JSON.stringify(users));
-      }
-    }
-
-    // Main login function (for development/fallback)
-    function login(loginValue, password) {
-      let users = [];
-      try {
-        const stored = localStorage.getItem('lumos-users') || '[]';
-        users = JSON.parse(stored);
-      } catch (e) {
-        console.error('Error parsing users:', e);
-        return { error: 'An error occurred. Please try again.' };
-      }
-
-      // Seed default admin if no users
-      if (!users.length) {
-        const defaultAdmin = {
-          id: 'u_admin',
-          role: 'admin',
-          email: 'admin',
-          name: 'Admin',
-          password: 'admin123'
-        };
-        users = [defaultAdmin];
-        localStorage.setItem('lumos-users', JSON.stringify(users));
-      }
-
-      // Find user by userid OR email
-      const user = users.find(u => {
-        const userIdMatch = u.userid && u.userid === loginValue;
-        const emailMatch = u.email && u.email === loginValue;
-        return userIdMatch || emailMatch;
-      });
-
-      if (!user) {
-        return { error: 'User not found' };
-      }
-
-      if (user.password !== password) {
-        return { error: 'Wrong password' };
-      }
-
-      // Save session
-      const sessionData = {
-        id: user.id,
-        role: user.role,
-        name: user.name,
-        group: user.group || null
-      };
-      localStorage.setItem('lumos-session', JSON.stringify(sessionData));
-
-      // Return redirect
-      const redirects = {
-        'admin': '/admin.html',
-        'teacher': '/teacher.html',
-        'student': '/student.html'
-      };
-      return { redirect: redirects[user.role] || '/student.html' };
     }
 
     // Initialize
     document.addEventListener('DOMContentLoaded', function() {
-      // Check if already authenticated via API (primary method)
       checkAuth();
 
-      // Check if already logged in via localStorage (fallback)
-      checkExistingSession();
-
-      // Seed default admin if needed
-      seedDefaultAdminIfNeeded();
-
-      // Form submission
       const form = document.getElementById('loginForm');
       const loginInput = document.getElementById('loginInput');
       const passwordInput = document.getElementById('passwordInput');
       const signInBtn = document.getElementById('signInBtn');
       const errorBox = document.getElementById('errorBox');
 
-      form.addEventListener('submit', function(e) {
+      form.addEventListener('submit', async function(e) {
         e.preventDefault();
-
-        // Hide error box
         errorBox.classList.remove('show');
         errorBox.textContent = '';
 
-        // Get values
         const loginValue = loginInput.value.trim();
         const password = passwordInput.value;
 
-        // Validate
-        if (!loginValue) {
-          showError('Please enter your User ID or Email');
-          return;
-        }
+        if (!loginValue) { showError('Please enter your User ID or Email'); return; }
+        if (!password) { showError('Please enter your password'); return; }
 
-        if (!password) {
-          showError('Please enter your password');
-          return;
-        }
-
-        // Disable button and show loading
         signInBtn.disabled = true;
         const originalText = signInBtn.textContent;
         signInBtn.innerHTML = '<span class="loading"></span>Signing in...';
 
-        // Try API login first
-        loginViaAPI(loginValue, password, originalText);
-      });
-
-      async function loginViaAPI(loginValue, password, originalText) {
         try {
           const res = await fetch('/api/auth/login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
             body: JSON.stringify({ login: loginValue, password })
           });
 
           const data = await res.json();
 
           if (!res.ok) {
-            // API login failed, fall back to localStorage login for development
-            console.log('API login failed, trying localStorage fallback');
-            const result = login(loginValue, password);
-
-            if (result.error) {
-              showError(result.error);
-              signInBtn.disabled = false;
-              signInBtn.textContent = originalText;
-            } else if (result.redirect) {
-              window.location.href = result.redirect;
-            }
+            showError(data.error || 'Invalid credentials');
+            signInBtn.disabled = false;
+            signInBtn.textContent = originalText;
             return;
           }
 
-          // API login succeeded
+          // Login succeeded — redirect
           if (data.redirect) {
             window.location.href = data.redirect;
           } else {
-            // Fallback redirect
             window.location.href = '/student.html';
           }
         } catch (error) {
-          // Network error, try fallback
-          console.error('API login error:', error);
-          const result = login(loginValue, password);
-
-          if (result.error) {
-            showError(result.error);
-            signInBtn.disabled = false;
-            signInBtn.textContent = originalText;
-          } else if (result.redirect) {
-            window.location.href = result.redirect;
-          }
+          console.error('Login error:', error);
+          showError('Unable to connect to server. Please try again.');
+          signInBtn.disabled = false;
+          signInBtn.textContent = originalText;
         }
-      }
+      });
 
       function showError(message) {
         errorBox.textContent = message;
@@ -493,14 +348,8 @@
         passwordInput.value = '';
       }
 
-      // Clear error on input
-      loginInput.addEventListener('focus', function() {
-        errorBox.classList.remove('show');
-      });
-
-      passwordInput.addEventListener('focus', function() {
-        errorBox.classList.remove('show');
-      });
+      loginInput.addEventListener('focus', function() { errorBox.classList.remove('show'); });
+      passwordInput.addEventListener('focus', function() { errorBox.classList.remove('show'); });
     });
   </script>
 </body>
