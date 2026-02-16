@@ -262,6 +262,7 @@ router.get('/groups', async (req, res) => {
     }
     return res.json(result);
   } catch (err) {
+    console.error('GET /groups error:', err);
     return res.status(500).json({ error: err.message });
   }
 });

@@ -41,9 +41,12 @@ app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/teacher', teacherRoutes);
 
-const publicDir = path.join(__dirname, 'public');
-app.use(express.static(publicDir));
+// Health check endpoint to verify deployment
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', version: '1.1.0-groups', timestamp: new Date().toISOString() });
+});
 
+const publicDir = path.join(__dirname, 'public');
 const User = require('./models/User');
 
 function requireRole(role) {
@@ -74,6 +77,7 @@ app.get('/', (req, res) => {
   res.redirect('/student.html');
 });
 
+// Auth-guarded HTML pages (registered BEFORE static middleware so auth is enforced)
 app.get('/student.html', requireRole('student'), (req, res) => {
   res.sendFile(path.join(publicDir, 'student.html'));
 });
@@ -85,6 +89,9 @@ app.get('/teacher.html', requireRole('teacher'), (req, res) => {
 app.get('/admin.html', requireRole('admin'), (req, res) => {
   res.sendFile(path.join(publicDir, 'admin.html'));
 });
+
+// Static files AFTER auth-guarded routes (so login.html, portal.html, CSS, JS are still public)
+app.use(express.static(publicDir));
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
