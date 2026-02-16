@@ -5,6 +5,7 @@ const MongoStore = require('connect-mongo');
 const connectDB = require('./config/db');
 const authRoutes = require('./routes/auth');
 const adminRoutes = require('./routes/admin');
+const teacherRoutes = require('./routes/teacher');
 const { requireAuth, requireAdmin } = require('./middleware/auth');
 
 const app = express();
@@ -41,6 +42,7 @@ connectDB();
 
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/teacher', teacherRoutes);
 
 const publicDir = path.join(__dirname, 'public');
 app.use(express.static(publicDir));

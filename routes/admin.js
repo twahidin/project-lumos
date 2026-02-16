@@ -146,6 +146,17 @@ router.post('/users/:id/reset-password', async (req, res) => {
   }
 });
 
+router.delete('/users/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const user = await User.findByIdAndDelete(id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    return res.json({ ok: true });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 router.post('/users/:id/teacher-rights', async (req, res) => {
   const { id } = req.params;
   const { grant } = req.body || {};
