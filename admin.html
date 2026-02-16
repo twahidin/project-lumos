@@ -425,12 +425,59 @@
   <div class="container">
     <!-- Tabs -->
     <div class="tabs">
-      <button class="tab-button active" data-tab="users">Users</button>
+      <button class="tab-button active" data-tab="groups">Groups</button>
+      <button class="tab-button" data-tab="users">Users</button>
       <button class="tab-button" data-tab="upload">Upload Students</button>
     </div>
 
+    <!-- Groups Tab -->
+    <div class="tab-panel active" id="groups-panel">
+      <div id="groupMessage" class="message"></div>
+
+      <!-- Create Group Card -->
+      <div class="card">
+        <div class="card-title">Create group</div>
+        <form id="addGroupForm">
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="groupName">Group Name</label>
+              <input type="text" id="groupName" placeholder="e.g. Class A, Group 1" required autocomplete="off">
+            </div>
+            <div class="form-group">
+              <label for="groupDesc">Description (optional)</label>
+              <input type="text" id="groupDesc" placeholder="e.g. Monday morning class" autocomplete="off">
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary">Create Group</button>
+        </form>
+      </div>
+
+      <!-- All Groups Card -->
+      <div class="card">
+        <div class="card-title">All groups</div>
+        <div class="table-wrapper">
+          <table id="groupsTable">
+            <thead>
+              <tr>
+                <th>Group Name</th>
+                <th>Description</th>
+                <th>Members</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="groupsTableBody">
+            </tbody>
+          </table>
+        </div>
+        <div id="emptyGroupsState" class="empty-state">
+          <div class="empty-state-icon">📁</div>
+          <p>No groups yet. Create one to get started.</p>
+        </div>
+      </div>
+    </div>
+
     <!-- Users Tab -->
-    <div class="tab-panel active" id="users-panel">
+    <div class="tab-panel" id="users-panel">
       <div id="message" class="message"></div>
 
       <!-- Add Single User Card -->
@@ -459,7 +506,9 @@
             </div>
             <div class="form-group">
               <label for="group">Group</label>
-              <input type="text" id="group" placeholder="Group/Class" required autocomplete="off">
+              <select id="group" required autocomplete="off">
+                <option value="">Select group...</option>
+              </select>
             </div>
           </div>
           <div class="form-group">
@@ -501,16 +550,24 @@
 
       <div class="card">
         <div class="card-title">Upload Students</div>
-        <p style="color: var(--text-muted); margin-bottom: 1.5rem;">Upload a CSV with columns: userid, name, group (one student per line)</p>
+        <p style="color: var(--text-muted); margin-bottom: 1.5rem;">Upload a CSV with columns: userid, name (one student per line). All students will be added to the selected group.</p>
 
-        <div class="form-group">
-          <label for="defaultPassword">Default Password</label>
-          <input type="password" id="defaultPassword" placeholder="Password for all students" autocomplete="off">
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="uploadGroup">Group</label>
+            <select id="uploadGroup" required autocomplete="off">
+              <option value="">Select group...</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="defaultPassword">Default Password</label>
+            <input type="password" id="defaultPassword" placeholder="Password for all students" autocomplete="off">
+          </div>
         </div>
 
         <div class="form-group">
           <label for="csvInput">CSV Data</label>
-          <textarea id="csvInput" placeholder="userid,name,group&#10;S001,John Doe,Class A&#10;S002,Jane Smith,Class B"></textarea>
+          <textarea id="csvInput" placeholder="userid,name&#10;S001,John Doe&#10;S002,Jane Smith"></textarea>
         </div>
 
         <button class="btn btn-primary" onclick="uploadStudents()">Upload Students</button>
@@ -543,11 +600,43 @@
       </div>
       <div class="form-group">
         <label for="editGroup">Group</label>
-        <input type="text" id="editGroup" placeholder="Group/Class" autocomplete="off">
+        <select id="editGroup" autocomplete="off">
+          <option value="">Select group...</option>
+        </select>
       </div>
       <div class="modal-actions">
         <button class="btn btn-secondary" onclick="closeEditModal()">Cancel</button>
         <button class="btn btn-primary" onclick="confirmEditUser()">Save Changes</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit Group Modal -->
+  <div class="modal-overlay" id="editGroupModal">
+    <div class="modal">
+      <div class="modal-title">Edit Group</div>
+      <div class="form-group">
+        <label for="editGroupName">Group Name</label>
+        <input type="text" id="editGroupName" placeholder="Group name" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label for="editGroupDesc">Description</label>
+        <input type="text" id="editGroupDesc" placeholder="Description" autocomplete="off">
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="closeEditGroupModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="confirmEditGroup()">Save Changes</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- View Group Members Modal -->
+  <div class="modal-overlay" id="viewMembersModal">
+    <div class="modal">
+      <div class="modal-title" id="viewMembersTitle">Group Members</div>
+      <div id="membersList" style="max-height: 400px; overflow-y: auto;"></div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="closeMembersModal()">Close</button>
       </div>
     </div>
   </div>
@@ -640,7 +729,7 @@
         const res = await apiPost('/users', body);
         if (!res.ok) {
           const error = await res.json();
-          showMessage(error.message || 'Failed to add user', 'error');
+          showMessage(error.error || error.message || 'Failed to add user', 'error');
           return;
         }
 
@@ -723,7 +812,7 @@
         const res = await apiPost(`/users/${resetUserId}/reset-password`, { newPassword });
         if (!res.ok) {
           const error = await res.json();
-          showMessage(error.message || 'Failed to reset password', 'error');
+          showMessage(error.error || 'Failed to reset password', 'error');
           return;
         }
 
@@ -764,7 +853,7 @@
         const res = await apiPatch(`/users/${editUserId}`, { name, group });
         if (!res.ok) {
           const error = await res.json();
-          showMessage(error.message || 'Failed to update user', 'error');
+          showMessage(error.error || 'Failed to update user', 'error');
           return;
         }
 
@@ -786,7 +875,7 @@
         const res = await apiDelete(`/users/${userId}`);
         if (!res.ok) {
           const error = await res.json();
-          showMessage(error.message || 'Failed to delete user', 'error');
+          showMessage(error.error || 'Failed to delete user', 'error');
           return;
         }
 
@@ -799,8 +888,14 @@
 
     // Upload students
     async function uploadStudents() {
+      const uploadGroup = document.getElementById('uploadGroup').value;
       const defaultPassword = document.getElementById('defaultPassword').value.trim();
       const csvInput = document.getElementById('csvInput').value.trim();
+
+      if (!uploadGroup) {
+        showMessage('Please select a group', 'error', 'uploadMessage');
+        return;
+      }
 
       if (!defaultPassword) {
         showMessage('Please enter a default password', 'error', 'uploadMessage');
@@ -812,17 +907,17 @@
         return;
       }
 
-      // Parse CSV
+      // Parse CSV — supports "userid,name" or "userid,name,group" (group column ignored, uses dropdown)
       const lines = csvInput.split('\n').filter(line => line.trim());
       const students = [];
 
       for (const line of lines) {
         const parts = line.split(',').map(p => p.trim());
-        if (parts.length >= 3) {
+        if (parts.length >= 2) {
           students.push({
             userid: parts[0],
             name: parts[1],
-            group: parts[2]
+            group: uploadGroup
           });
         }
       }
@@ -836,31 +931,188 @@
         const res = await apiPost('/users/bulk', { students, defaultPassword });
         if (!res.ok) {
           const error = await res.json();
-          showMessage(error.message || 'Failed to upload students', 'error', 'uploadMessage');
+          showMessage(error.error || 'Failed to upload students', 'error', 'uploadMessage');
           return;
         }
 
         const result = await res.json();
-        showMessage(`Successfully added ${result.created || students.length} students`, 'success', 'uploadMessage');
+        const count = result.created ? result.created.length : students.length;
+        let msg = `Successfully added ${count} student(s) to ${uploadGroup}`;
+        if (result.skipped && result.skipped.length) msg += `. ${result.skipped.length} skipped (already exist)`;
+        if (result.errors && result.errors.length) msg += `. ${result.errors.length} error(s)`;
+        showMessage(msg, 'success', 'uploadMessage');
         document.getElementById('defaultPassword').value = '';
         document.getElementById('csvInput').value = '';
         loadUsers();
+        loadGroups();
       } catch (err) {
         showMessage('Error uploading students', 'error', 'uploadMessage');
       }
     }
 
-    // Close modals when clicking outside
-    document.getElementById('resetPasswordModal').addEventListener('click', (e) => {
-      if (e.target === document.getElementById('resetPasswordModal')) {
-        closeResetModal();
+    // ── Groups ──
+    let groupsCache = [];
+
+    async function loadGroups() {
+      try {
+        const res = await api('/groups');
+        if (!res.ok) { showMessage('Failed to load groups', 'error', 'groupMessage'); return; }
+        groupsCache = await res.json();
+        renderGroupsTable();
+        populateGroupDropdowns();
+      } catch (err) {
+        showMessage('Error loading groups', 'error', 'groupMessage');
+      }
+    }
+
+    function renderGroupsTable() {
+      const tbody = document.getElementById('groupsTableBody');
+      const empty = document.getElementById('emptyGroupsState');
+      if (groupsCache.length === 0) {
+        tbody.innerHTML = '';
+        empty.style.display = 'block';
+        document.getElementById('groupsTable').style.display = 'none';
+        return;
+      }
+      empty.style.display = 'none';
+      document.getElementById('groupsTable').style.display = 'table';
+      tbody.innerHTML = groupsCache.map(g => `
+        <tr>
+          <td><strong>${escapeHtml(g.name)}</strong></td>
+          <td>${escapeHtml(g.description || '-')}</td>
+          <td>
+            <span style="cursor:pointer;color:var(--accent);font-weight:700" onclick="viewMembers('${g._id}', '${escapeHtml(g.name)}')">
+              ${g.memberCount} member${g.memberCount !== 1 ? 's' : ''}
+            </span>
+          </td>
+          <td>
+            <div class="actions-cell">
+              <button class="btn btn-secondary btn-small" onclick="openEditGroupModal('${g._id}', '${escapeHtml(g.name)}', '${escapeHtml(g.description || '')}')">Edit</button>
+              <button class="btn btn-danger btn-small" onclick="deleteGroup('${g._id}')">Delete</button>
+            </div>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function populateGroupDropdowns() {
+      const options = '<option value="">Select group...</option>' + groupsCache.map(g => `<option value="${escapeHtml(g.name)}">${escapeHtml(g.name)}</option>`).join('');
+      document.getElementById('group').innerHTML = options;
+      document.getElementById('editGroup').innerHTML = options;
+      document.getElementById('uploadGroup').innerHTML = options;
+    }
+
+    document.getElementById('addGroupForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const name = document.getElementById('groupName').value.trim();
+      const description = document.getElementById('groupDesc').value.trim();
+      if (!name) { showMessage('Group name is required', 'error', 'groupMessage'); return; }
+      try {
+        const res = await apiPost('/groups', { name, description });
+        if (!res.ok) {
+          const err = await res.json();
+          showMessage(err.error || 'Failed to create group', 'error', 'groupMessage');
+          return;
+        }
+        showMessage('Group created successfully', 'success', 'groupMessage');
+        document.getElementById('addGroupForm').reset();
+        loadGroups();
+      } catch (err) {
+        showMessage('Error creating group', 'error', 'groupMessage');
       }
     });
 
-    document.getElementById('editUserModal').addEventListener('click', (e) => {
-      if (e.target === document.getElementById('editUserModal')) {
-        closeEditModal();
+    let editGroupId = null;
+
+    function openEditGroupModal(id, name, desc) {
+      editGroupId = id;
+      document.getElementById('editGroupName').value = name;
+      document.getElementById('editGroupDesc').value = desc;
+      document.getElementById('editGroupModal').classList.add('show');
+      document.getElementById('editGroupName').focus();
+    }
+
+    function closeEditGroupModal() {
+      document.getElementById('editGroupModal').classList.remove('show');
+      editGroupId = null;
+    }
+
+    async function confirmEditGroup() {
+      const name = document.getElementById('editGroupName').value.trim();
+      const description = document.getElementById('editGroupDesc').value.trim();
+      if (!name) { showMessage('Group name is required', 'error', 'groupMessage'); return; }
+      try {
+        const res = await apiPatch(`/groups/${editGroupId}`, { name, description });
+        if (!res.ok) {
+          const err = await res.json();
+          showMessage(err.error || 'Failed to update group', 'error', 'groupMessage');
+          return;
+        }
+        showMessage('Group updated (members reassigned)', 'success', 'groupMessage');
+        closeEditGroupModal();
+        loadGroups();
+        loadUsers();
+      } catch (err) {
+        showMessage('Error updating group', 'error', 'groupMessage');
       }
+    }
+
+    async function deleteGroup(id) {
+      if (!confirm('Delete this group? Groups with members cannot be deleted.')) return;
+      try {
+        const res = await apiDelete(`/groups/${id}`);
+        if (!res.ok) {
+          const err = await res.json();
+          showMessage(err.error || 'Failed to delete group', 'error', 'groupMessage');
+          return;
+        }
+        showMessage('Group deleted', 'success', 'groupMessage');
+        loadGroups();
+      } catch (err) {
+        showMessage('Error deleting group', 'error', 'groupMessage');
+      }
+    }
+
+    async function viewMembers(id, name) {
+      document.getElementById('viewMembersTitle').textContent = name + ' — Members';
+      document.getElementById('membersList').innerHTML = '<p style="color:var(--text-muted);text-align:center;padding:1rem">Loading...</p>';
+      document.getElementById('viewMembersModal').classList.add('show');
+      try {
+        const res = await api(`/groups/${id}/members`);
+        if (!res.ok) { document.getElementById('membersList').innerHTML = '<p style="color:var(--danger)">Failed to load</p>'; return; }
+        const members = await res.json();
+        if (members.length === 0) {
+          document.getElementById('membersList').innerHTML = '<div class="empty-state" style="padding:1rem"><p>No members in this group</p></div>';
+          return;
+        }
+        document.getElementById('membersList').innerHTML = members.map(m => `
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:0.75rem;border-bottom:1px solid var(--border)">
+            <div>
+              <strong>${escapeHtml(m.name)}</strong>
+              <span style="color:var(--text-muted);font-size:.85rem;margin-left:.5rem">${escapeHtml(m.userid || m.email)}</span>
+            </div>
+            <span class="badge badge-${m.role}">${m.role}</span>
+          </div>
+        `).join('');
+      } catch (err) {
+        document.getElementById('membersList').innerHTML = '<p style="color:var(--danger)">Error loading members</p>';
+      }
+    }
+
+    function closeMembersModal() {
+      document.getElementById('viewMembersModal').classList.remove('show');
+    }
+
+    // Close modals when clicking outside
+    document.querySelectorAll('.modal-overlay').forEach(overlay => {
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) {
+          overlay.classList.remove('show');
+          resetUserId = null;
+          editUserId = null;
+          editGroupId = null;
+        }
+      });
     });
 
     // HTML escape for security
@@ -877,6 +1129,7 @@
 
     // Initialize on page load
     checkAuth().then(() => {
+      loadGroups();
       loadUsers();
     });
   </script>

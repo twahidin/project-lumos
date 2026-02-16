@@ -29,10 +29,7 @@ const sessionConfig = {
 // Use MongoDB for sessions (connect-mongo v5 requires mongoUrl). Accept MONGO_URI, MONGO_URL, or MONGODB_URI (Railway uses MONGO_URI).
 const mongoUrl = (process.env.MONGODB_URI || process.env.MONGO_URI || process.env.MONGO_URL || '').trim();
 if (mongoUrl) {
-  sessionConfig.store = MongoStore.create({
-    mongoUrl,
-    crypto: { secret: sessionConfig.secret }
-  });
+  sessionConfig.store = MongoStore.create({ mongoUrl });
 }
 
 app.use(session(sessionConfig));

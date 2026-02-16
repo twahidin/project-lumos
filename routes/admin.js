@@ -1,5 +1,6 @@
 const express = require('express');
 const User = require('../models/User');
+const Group = require('../models/Group');
 const WhoDocumentation = require('../models/WhoDocumentation');
 const { requireAdmin } = require('../middleware/auth');
 
@@ -243,6 +244,90 @@ router.patch('/who-docs/:id', async (req, res) => {
     const doc = await WhoDocumentation.findByIdAndUpdate(id, { $set: toSet }, { new: true });
     if (!doc) return res.status(404).json({ error: 'WHO doc not found' });
     return res.json(doc);
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Group CRUD ──
+
+router.get('/groups', async (req, res) => {
+  try {
+    const groups = await Group.find().sort({ name: 1 });
+    // Attach member counts
+    const result = [];
+    for (const g of groups) {
+      const memberCount = await User.countDocuments({ group: g.name });
+      result.push({ _id: g._id, name: g.name, description: g.description, memberCount, createdAt: g.createdAt });
+    }
+    return res.json(result);
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/groups', async (req, res) => {
+  const { name, description } = req.body || {};
+  if (!name || !name.trim()) {
+    return res.status(400).json({ error: 'Group name is required' });
+  }
+  try {
+    const existing = await Group.findOne({ name: name.trim() });
+    if (existing) return res.status(400).json({ error: 'Group name already exists' });
+    const group = await Group.create({ name: name.trim(), description: (description || '').trim() });
+    return res.json(group);
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+router.patch('/groups/:id', async (req, res) => {
+  const { id } = req.params;
+  const { name, description } = req.body || {};
+  try {
+    const group = await Group.findById(id);
+    if (!group) return res.status(404).json({ error: 'Group not found' });
+    const oldName = group.name;
+    if (name && name.trim() && name.trim() !== oldName) {
+      const dup = await Group.findOne({ name: name.trim(), _id: { $ne: id } });
+      if (dup) return res.status(400).json({ error: 'Group name already exists' });
+      group.name = name.trim();
+      // Update all users in the old group to the new name
+      await User.updateMany({ group: oldName }, { $set: { group: name.trim() } });
+    }
+    if (description !== undefined) group.description = (description || '').trim();
+    group.updatedAt = new Date();
+    await group.save();
+    return res.json(group);
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete('/groups/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const group = await Group.findById(id);
+    if (!group) return res.status(404).json({ error: 'Group not found' });
+    // Check if group has members
+    const memberCount = await User.countDocuments({ group: group.name });
+    if (memberCount > 0) {
+      return res.status(400).json({ error: `Cannot delete group with ${memberCount} member(s). Remove or reassign members first.` });
+    }
+    await Group.findByIdAndDelete(id);
+    return res.json({ ok: true });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/groups/:id/members', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const group = await Group.findById(id);
+    if (!group) return res.status(404).json({ error: 'Group not found' });
+    const members = await User.find({ group: group.name }).select('-password').sort({ name: 1 });
+    return res.json(members);
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
