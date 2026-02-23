@@ -17,8 +17,14 @@ router.get('/users', async (req, res) => {
   }
 });
 
+function normalizeGroups(groups) {
+  if (Array.isArray(groups)) return groups.map(g => String(g || '').trim()).filter(Boolean);
+  if (groups != null && typeof groups === 'string') return groups.split(',').map(s => s.trim()).filter(Boolean);
+  return [];
+}
+
 router.post('/users', async (req, res) => {
-  const { email, userid, password, name, role, group, members } = req.body || {};
+  const { email, userid, password, name, role, group, members, groups } = req.body || {};
   const r = role === 'teacher' || role === 'admin' ? role : 'student';
   if (!password || !name) {
     return res.status(400).json({ error: 'Password and name required' });
@@ -57,6 +63,7 @@ router.post('/users', async (req, res) => {
       name: (name || '').trim(),
       role: r,
       group: (group || '').trim(),
+      groups: normalizeGroups(groups),
       members: Array.isArray(members) ? members : (members ? String(members).split(',').map(s => s.trim()).filter(Boolean) : []),
       isTeacher: r === 'teacher'
     });
@@ -105,10 +112,10 @@ router.post('/users/bulk', async (req, res) => {
 router.patch('/users/:id', async (req, res) => {
   const { id } = req.params;
   const updates = req.body || {};
-  const allowed = ['name', 'userid', 'group', 'members', 'role', 'isTeacher', 'resources'];
+  const allowed = ['name', 'userid', 'group', 'groups', 'members', 'role', 'isTeacher', 'resources'];
   const toSet = {};
   allowed.forEach(k => {
-    if (updates[k] !== undefined) toSet[k] = updates[k];
+    if (updates[k] !== undefined) toSet[k] = k === 'groups' ? normalizeGroups(updates[k]) : updates[k];
   });
   if (updates.password && updates.password.trim()) {
     const user = await User.findById(id);
