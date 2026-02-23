@@ -613,7 +613,7 @@ async function loadAndShowStudents() {
               <td>${esc(student.userid || '—')}</td>
               <td>${esc(student.group || '—')}</td>
               <td>
-                <button class="t-btn" style="padding:5px 12px;font-size:.75rem" onclick="selectStudent('${esc(student.userid || student.name)}', '${esc(student.name || 'Unknown')}')">View</button>
+                <button class="t-btn" style="padding:5px 12px;font-size:.75rem" onclick="selectStudent('${student._id || ''}', '${esc(student.name || 'Unknown')}', '${esc(student.userid || '')}')">View</button>
               </td>
             </tr>
           `).join('')}
@@ -625,9 +625,9 @@ async function loadAndShowStudents() {
   studentsList.innerHTML = html;
 }
 
-function selectStudent(userId, name) {
-  state.selectedStudent = { id: userId, name: name };
-  showStudentDetail(userId, name);
+function selectStudent(studentId, name, userid) {
+  state.selectedStudent = { id: studentId, name: name, userid: userid };
+  showStudentDetail(studentId, name);
 }
 
 async function showStudentDetail(userId, name) {
@@ -656,9 +656,16 @@ async function showStudentDetail(userId, name) {
   try {
     const r = await fetch('/api/teacher/students/' + encodeURIComponent(userId) + '/work?week=' + state.currentWeek, { credentials: 'same-origin' });
     if (!r.ok) {
+      let msg = 'Unable to load work.';
+      try {
+        const err = await r.json();
+        if (r.status === 404) msg = 'Student not found.';
+        else if (r.status === 403) msg = 'You are not assigned to this student\'s group.';
+        else if (err && err.error) msg = err.error;
+      } catch (_) {}
       tc.openStages.forEach(sid => {
         const workDiv = document.getElementById('student-' + sid + '-work');
-        if (workDiv) workDiv.innerHTML = '<p style="color:var(--text-muted)">Unable to load work.</p>';
+        if (workDiv) workDiv.innerHTML = '<p style="color:var(--text-muted)">' + esc(msg) + '</p>';
       });
       return;
     }
