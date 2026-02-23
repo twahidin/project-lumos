@@ -355,6 +355,8 @@
         localStorage.setItem('dt-config', JSON.stringify(config));
         state.role = 'student';
         loadState();
+        await loadConfigFromAPI(state.currentWeek);
+        await loadWorkFromAPI(state.currentWeek);
         updateNav();
         renderStudentMap();
       } catch(e) {
@@ -407,6 +409,64 @@
       initializeWeeks();
     }
 
+    async function loadConfigFromAPI(week) {
+      try {
+        const r = await fetch('/api/student/config?week=' + week, {credentials:'same-origin'});
+        if (!r.ok) return;
+        const data = await r.json();
+        const w = 'week' + week;
+        TD.weekConfigs[w] = TD.weekConfigs[w] || {};
+        TD.weekConfigs[w].openStages = data.openStages || ['empathize'];
+        TD.weekConfigs[w].announcement = data.announcement || '';
+        TD.weekConfigs[w].stages = data.stages || {};
+        STAGES.forEach(s=>{
+          if (!TD.announcements) TD.announcements = {};
+          TD.announcements[s.id] = TD.weekConfigs[w].announcement;
+        });
+        if (state.weeks[week]) {
+          STAGES.forEach(s=>{
+            if (!state.weeks[week][s.id]) state.weeks[week][s.id] = {open:true, blocks:[], reflection:'', personal:{}};
+            state.weeks[week][s.id].open = (TD.weekConfigs[w].openStages || []).includes(s.id);
+          });
+        }
+      } catch(e) {console.error('Load config error:', e);}
+    }
+
+    async function loadWorkFromAPI(week) {
+      try {
+        const r = await fetch('/api/student/work?week=' + week, {credentials:'same-origin'});
+        if (!r.ok) return;
+        const data = await r.json();
+        if (!state.weeks[week]) state.weeks[week] = {};
+        const groupByStage = data.group || {};
+        const personalByStage = data.personal || {};
+        STAGES.forEach(s=>{
+          const sid = s.id;
+          if (!state.weeks[week][sid]) state.weeks[week][sid] = {open:true, blocks:[], reflection:'', personal:{}};
+          if (groupByStage[sid]) {
+            state.weeks[week][sid].blocks = Array.isArray(groupByStage[sid].blocks) ? groupByStage[sid].blocks : [];
+            state.weeks[week][sid].reflection = groupByStage[sid].reflection || '';
+          }
+          if (personalByStage[sid]) {
+            if (!state.weeks[week][sid].personal[config.name]) state.weeks[week][sid].personal[config.name] = {blocks:[], reflection:''};
+            state.weeks[week][sid].personal[config.name].blocks = Array.isArray(personalByStage[sid].blocks) ? personalByStage[sid].blocks : [];
+            state.weeks[week][sid].personal[config.name].reflection = personalByStage[sid].reflection || '';
+          }
+        });
+      } catch(e) {console.error('Load work error:', e);}
+    }
+
+    async function saveWorkToAPI(week, stageId, context, payload) {
+      try {
+        await fetch('/api/student/work', {
+          method:'PUT',
+          credentials:'same-origin',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({week, stageId, context, ...payload})
+        });
+      } catch(e) {console.error('Save work error:', e);}
+    }
+
     function initializeWeeks() {
       if (!state.weeks[state.currentWeek]) {
         state.weeks[state.currentWeek] = {};
@@ -427,11 +487,13 @@
       document.getElementById('nextWeekBtn').disabled = state.currentWeek >= state.totalWeeks;
     }
 
-    function changeWeek(delta) {
+    async function changeWeek(delta) {
       const newWeek = state.currentWeek + delta;
       if (newWeek >= 1 && newWeek <= state.totalWeeks) {
         state.currentWeek = newWeek;
         initializeWeeks();
+        await loadConfigFromAPI(state.currentWeek);
+        await loadWorkFromAPI(state.currentWeek);
         if (state.currentStage) closeDetail();
         renderStudentMap();
       }
@@ -444,7 +506,8 @@
       STAGES.forEach((stage, idx)=>{
         const wk = state.weeks[state.currentWeek];
         const stageData = wk[stage.id] || {};
-        const isOpen = stageData.open !== false;
+        const tc = TD.weekConfigs && TD.weekConfigs['week'+state.currentWeek];
+        const isOpen = tc && tc.openStages ? tc.openStages.includes(stage.id) : (stageData.open !== false);
         const blockCount = (stageData.blocks || []).length;
         const progress = blockCount > 0 ? Math.min(100, blockCount * 25) : 0;
         totalProgress += progress;
@@ -932,11 +995,22 @@
 
     function autoSave() {
       saveState();
-      document.getElementById('syncDot').style.background = '#fbbf24';
-      document.getElementById('syncLabel').textContent = 'Syncing...';
+      if (state.currentStage) {
+        const wk = state.weeks[state.currentWeek];
+        const sd = wk && wk[state.currentStage];
+        if (sd) {
+          saveWorkToAPI(state.currentWeek, state.currentStage, 'group', {blocks: sd.blocks || [], reflection: sd.reflection || ''});
+          const personal = sd.personal && sd.personal[config.name];
+          if (personal) saveWorkToAPI(state.currentWeek, state.currentStage, 'personal', {blocks: personal.blocks || [], reflection: personal.reflection || ''});
+        }
+      }
+      const syncDot = document.getElementById('syncDot');
+      const syncLabel = document.getElementById('syncLabel');
+      if (syncDot) syncDot.style.background = '#fbbf24';
+      if (syncLabel) syncLabel.textContent = 'Syncing...';
       setTimeout(()=>{
-        document.getElementById('syncDot').style.background = '#10b981';
-        document.getElementById('syncLabel').textContent = 'Synced';
+        if (syncDot) syncDot.style.background = '#10b981';
+        if (syncLabel) syncLabel.textContent = 'Synced';
       }, 1000);
     }
 
