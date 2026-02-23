@@ -2,7 +2,8 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
 const userSchema = new mongoose.Schema({
-  email: { type: String, trim: true, lowercase: true, sparse: true, unique: true }, // optional; teachers/admins use it
+  // optional; teachers/admins use it. Partial unique index so multiple students without email are allowed (no E11000 on null)
+  email: { type: String, trim: true, lowercase: true },
   userid: { type: String, trim: true, sparse: true, unique: true }, // student login identifier
   password: { type: String, required: true },
   name: { type: String, required: true, trim: true },
@@ -18,6 +19,12 @@ const userSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });
+
+// Unique email only when present (allows many users with no email, e.g. students)
+userSchema.index(
+  { email: 1 },
+  { unique: true, partialFilterExpression: { email: { $exists: true, $type: 'string', $ne: '' } } }
+);
 
 userSchema.pre('save', async function (next) {
   if (!this.isModified('password')) return next();

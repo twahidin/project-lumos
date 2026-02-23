@@ -26,10 +26,13 @@ router.post('/login', async (req, res) => {
     });
   }
   try {
-    const isEmail = loginId.includes('@');
-    const user = isEmail
-      ? await User.findOne({ email: loginId.toLowerCase() })
-      : await User.findOne({ userid: loginId });
+    // Match by email or userid so teachers can log in with either (e.g. "teacher2" or "teacher2@school.com")
+    const user = await User.findOne({
+      $or: [
+        { email: loginId.trim().toLowerCase() },
+        { userid: loginId }
+      ]
+    });
     if (!user) {
       return res.status(401).json({ error: 'Invalid User ID / Email or password' });
     }
