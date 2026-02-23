@@ -213,7 +213,7 @@ async function saveConfigToAPI() {
 
 function autoSave() {
   saveState();
-  saveConfigToAPI();
+  // Server save happens when teacher clicks "Apply settings"
 }
 
 function showToast(t, m) {
@@ -251,9 +251,18 @@ async function fetchGroups() {
 }
 
 // ===== DASHBOARD TAB =====
+const TAB_NAV_HTML = `
+  <div style="margin-bottom:20px">
+    <div class="tabs">
+      <button class="tab-btn" id="tab-dashboard" onclick="switchTab('dashboard')">📋 Dashboard</button>
+      <button class="tab-btn" id="tab-groups" onclick="switchTab('groups')">👥 Groups</button>
+      <button class="tab-btn" id="tab-students" onclick="switchTab('students')">👤 Students</button>
+    </div>
+  </div>`;
+
 function renderDashboard() {
   const tc = gTC();
-  let html = `
+  let html = TAB_NAV_HTML + `
     <div class="map-header">
       <h1>👩‍🏫 Teacher Dashboard</h1>
       <p>Configure tasks, milestones, and announcements for your class.</p>
@@ -264,6 +273,7 @@ function renderDashboard() {
       <div class="week-display">Week ${state.currentWeek}</div>
       <button class="week-nav-btn" ${state.currentWeek >= state.totalWeeks ? 'disabled' : ''} onclick="changeWeek(1)">›</button>
       <button class="add-week-btn" onclick="addWeek()">+ New Week</button>
+      <button class="add-week-btn" onclick="applyWeekSettings()" style="background:var(--teacher);margin-left:8px">✓ Apply settings</button>
     </div>
 
     <div class="teacher-card" id="applyToCard">
@@ -336,7 +346,40 @@ function renderDashboard() {
   `;
 
   document.getElementById('mainContent').innerHTML = html;
+  const tabDashboard = document.getElementById('tab-dashboard');
+  if (tabDashboard) tabDashboard.classList.add('active');
+  const tabGroups = document.getElementById('tab-groups');
+  if (tabGroups) tabGroups.classList.remove('active');
+  const tabStudents = document.getElementById('tab-students');
+  if (tabStudents) tabStudents.classList.remove('active');
   renderApplyToCheckboxes();
+}
+
+async function applyWeekSettings() {
+  saveState();
+  const groupScope = state.configGroupScope === 'all' ? 'all' : state.configSelectedGroups;
+  try {
+    const r = await fetch('/api/teacher/config', {
+      method: 'PUT',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        week: state.currentWeek,
+        groupScope,
+        openStages: gTC().openStages,
+        announcement: gTC().announcement,
+        stages: gTC().stages
+      })
+    });
+    if (r.ok) {
+      showToast('saved', '✓ Settings applied to selected groups');
+    } else {
+      const err = await r.json();
+      showToast('error', err.error || 'Apply failed');
+    }
+  } catch (e) {
+    showToast('error', 'Apply failed');
+  }
 }
 
 async function renderApplyToCheckboxes() {
@@ -422,7 +465,7 @@ function addWeek() {
 
 // ===== GROUPS TAB =====
 function renderGroupsTab() {
-  let html = `
+  let html = TAB_NAV_HTML + `
     <div class="map-header">
       <h1>👥 Student Groups</h1>
       <p>Browse all groups and their collaborative work.</p>
@@ -430,6 +473,9 @@ function renderGroupsTab() {
     <div id="groupsList"></div>
   `;
   document.getElementById('mainContent').innerHTML = html;
+  document.getElementById('tab-dashboard') && document.getElementById('tab-dashboard').classList.remove('active');
+  document.getElementById('tab-groups') && document.getElementById('tab-groups').classList.add('active');
+  document.getElementById('tab-students') && document.getElementById('tab-students').classList.remove('active');
   loadAndShowGroups();
 }
 
@@ -526,7 +572,7 @@ function backToGroups() {
 
 // ===== STUDENTS TAB =====
 function renderStudentsTab() {
-  let html = `
+  let html = TAB_NAV_HTML + `
     <div class="map-header">
       <h1>👤 Individual Students</h1>
       <p>Browse all students and their personal work.</p>
@@ -534,6 +580,9 @@ function renderStudentsTab() {
     <div id="studentsList"></div>
   `;
   document.getElementById('mainContent').innerHTML = html;
+  document.getElementById('tab-dashboard') && document.getElementById('tab-dashboard').classList.remove('active');
+  document.getElementById('tab-groups') && document.getElementById('tab-groups').classList.remove('active');
+  document.getElementById('tab-students') && document.getElementById('tab-students').classList.add('active');
   loadAndShowStudents();
 }
 

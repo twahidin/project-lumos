@@ -33,7 +33,18 @@ const sessionConfig = {
 // Use MongoDB for sessions (connect-mongo v5 requires mongoUrl). Accept MONGO_URI, MONGO_URL, or MONGODB_URI (Railway uses MONGO_URI).
 const mongoUrl = (process.env.MONGODB_URI || process.env.MONGO_URI || process.env.MONGO_URL || '').trim();
 if (mongoUrl) {
-  sessionConfig.store = MongoStore.create({ mongoUrl });
+  const store = MongoStore.create({ mongoUrl });
+  // Wrap touch so missing/expired sessions don't throw (stale cookie => treat as no-op).
+  const originalTouch = store.touch.bind(store);
+  store.touch = (sid, session, callback) => {
+    originalTouch(sid, session, (err) => {
+      if (err && err.message === 'Unable to find the session to touch') {
+        return callback(null);
+      }
+      callback(err);
+    });
+  };
+  sessionConfig.store = store;
 }
 
 app.use(session(sessionConfig));
