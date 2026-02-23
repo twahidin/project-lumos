@@ -9,6 +9,7 @@ const userSchema = new mongoose.Schema({
   name: { type: String, required: true, trim: true },
   role: { type: String, enum: ['student', 'teacher', 'admin'], default: 'student' },
   group: { type: String, trim: true, default: '' },
+  groups: [{ type: String, trim: true }], // teacher: assigned group names
   members: [{ type: String, trim: true }],
   isTeacher: { type: Boolean, default: false },
   resources: {
