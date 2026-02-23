@@ -1,6 +1,8 @@
 const express = require('express');
 const User = require('../models/User');
 const TeacherWeekConfig = require('../models/TeacherWeekConfig');
+const GroupStageWork = require('../models/GroupStageWork');
+const PersonalStageWork = require('../models/PersonalStageWork');
 const { requireTeacherOrAdmin } = require('../middleware/auth');
 
 const router = express.Router();
@@ -93,6 +95,59 @@ router.put('/config', async (req, res) => {
       { new: true, upsert: true }
     );
     return res.json(config);
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// Get group work for a given group and week (teacher must be assigned to group)
+router.get('/groups/:groupName/work', async (req, res) => {
+  try {
+    const { groupName } = req.params;
+    const week = parseInt(req.query.week, 10);
+    if (Number.isNaN(week) || week < 1) {
+      return res.status(400).json({ error: 'Valid week query required' });
+    }
+    const teacherGroups = req.user.groups;
+    if (Array.isArray(teacherGroups) && teacherGroups.length > 0) {
+      const name = (groupName || '').trim();
+      if (!teacherGroups.map(g => (g || '').trim()).includes(name)) {
+        return res.status(403).json({ error: 'Not assigned to this group' });
+      }
+    }
+    const works = await GroupStageWork.find({ group: (groupName || '').trim(), week }).lean();
+    const byStage = {};
+    works.forEach(w => { byStage[w.stageId] = w; });
+    return res.json(byStage);
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// Get personal work for a student (userId = userid string or _id) and week
+router.get('/students/:userId/work', async (req, res) => {
+  try {
+    const { userId: paramId } = req.params;
+    const week = parseInt(req.query.week, 10);
+    if (Number.isNaN(week) || week < 1) {
+      return res.status(400).json({ error: 'Valid week query required' });
+    }
+    const student = await User.findOne({
+      $or: [{ userid: (paramId || '').trim() }, { _id: paramId }],
+      role: 'student'
+    }).select('_id group');
+    if (!student) return res.status(404).json({ error: 'Student not found' });
+    const teacherGroups = req.user.groups;
+    if (Array.isArray(teacherGroups) && teacherGroups.length > 0) {
+      const g = (student.group || '').trim();
+      if (!teacherGroups.map(gr => (gr || '').trim()).includes(g)) {
+        return res.status(403).json({ error: 'Not assigned to this student\'s group' });
+      }
+    }
+    const works = await PersonalStageWork.find({ userId: student._id, week }).lean();
+    const byStage = {};
+    works.forEach(w => { byStage[w.stageId] = w; });
+    return res.json(byStage);
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
