@@ -504,12 +504,19 @@
               <label for="name">Name</label>
               <input type="text" id="name" placeholder="Full name" required autocomplete="off">
             </div>
-            <div class="form-group">
+            <div class="form-group" id="formGroupGroup">
               <label for="group">Group</label>
               <select id="group" required autocomplete="off">
                 <option value="">Select group...</option>
               </select>
             </div>
+          </div>
+          <div class="form-group" id="teacherGroupsWrap" style="display: none;">
+            <label for="teacherGroups">Groups (assign teacher to these groups)</label>
+            <select id="teacherGroups" multiple autocomplete="off" style="min-height: 80px;">
+              <option value="">Loading...</option>
+            </select>
+            <small style="color: var(--text-muted);">Hold Ctrl/Cmd to select multiple</small>
           </div>
           <div class="form-group">
             <label for="password">Password</label>
@@ -598,11 +605,18 @@
         <label for="editName">Name</label>
         <input type="text" id="editName" placeholder="Full name" autocomplete="off">
       </div>
-      <div class="form-group">
+      <div class="form-group" id="editGroupWrap">
         <label for="editGroup">Group</label>
         <select id="editGroup" autocomplete="off">
           <option value="">Select group...</option>
         </select>
+      </div>
+      <div class="form-group" id="editTeacherGroupsWrap" style="display: none;">
+        <label for="editTeacherGroups">Groups (assign teacher to these groups)</label>
+        <select id="editTeacherGroups" multiple autocomplete="off" style="min-height: 80px;">
+          <option value="">Loading...</option>
+        </select>
+        <small style="color: var(--text-muted);">Hold Ctrl/Cmd to select multiple</small>
       </div>
       <div class="modal-actions">
         <button class="btn btn-secondary" onclick="closeEditModal()">Cancel</button>
@@ -695,15 +709,23 @@
       }, 4000);
     }
 
-    // Update user identifier label based on role
+    // Update user identifier label and show/hide group vs teacher groups based on role
     document.getElementById('role').addEventListener('change', (e) => {
+      const role = e.target.value;
       const label = document.querySelector('label[for="userIdentifier"]');
-      if (e.target.value === 'student') {
+      if (role === 'student') {
         label.textContent = 'User ID';
         document.getElementById('userIdentifier').placeholder = 'Student ID';
+        document.getElementById('formGroupGroup').style.display = '';
+        document.getElementById('group').required = true;
+        document.getElementById('teacherGroupsWrap').style.display = 'none';
       } else {
         label.textContent = 'Email';
         document.getElementById('userIdentifier').placeholder = 'email@example.com';
+        document.getElementById('formGroupGroup').style.display = 'none';
+        document.getElementById('group').required = false;
+        document.getElementById('group').value = '';
+        document.getElementById('teacherGroupsWrap').style.display = role === 'teacher' ? 'block' : 'none';
       }
     });
 
@@ -720,10 +742,14 @@
       const body = {
         role,
         name,
-        group,
+        group: role === 'student' ? group : '',
         password,
         [role === 'student' ? 'userid' : 'email']: userIdentifier
       };
+      if (role === 'teacher') {
+        const teacherGroupsEl = document.getElementById('teacherGroups');
+        body.groups = Array.from(teacherGroupsEl.selectedOptions).map(o => o.value).filter(Boolean);
+      }
 
       try {
         const res = await apiPost('/users', body);
@@ -770,10 +796,10 @@
             <td>${escapeHtml(user.userid || user.email)}</td>
             <td>${escapeHtml(user.name)}</td>
             <td><span class="badge badge-${user.role}">${user.role}</span></td>
-            <td>${escapeHtml(user.group || '-')}</td>
+            <td>${escapeHtml(user.role === 'student' ? (user.group || '-') : (Array.isArray(user.groups) ? user.groups.join(', ') : '-'))}</td>
             <td>
               <div class="actions-cell">
-                <button class="btn btn-secondary btn-small" onclick="openEditModal('${user._id}', '${escapeHtml(user.name)}', '${escapeHtml(user.group || '')}')">Edit</button>
+                <button class="btn btn-secondary btn-small" onclick="openEditModal('${user._id}', '${escapeHtml(user.name)}', '${escapeHtml(user.group || '')}', '${user.role || 'student'}', '${escapeHtml((user.groups || []).join(','))}')">Edit</button>
                 <button class="btn btn-secondary btn-small" onclick="openResetModal('${user._id}')">Reset password</button>
                 <button class="btn btn-danger btn-small" onclick="deleteUser('${user._id}')">Delete</button>
               </div>
@@ -827,10 +853,21 @@
     // Edit user modal
     let editUserId = null;
 
-    function openEditModal(userId, currentName, currentGroup) {
+    let editUserRole = 'student';
+    function openEditModal(userId, currentName, currentGroup, currentRole, currentGroupsStr) {
       editUserId = userId;
+      editUserRole = currentRole || 'student';
       document.getElementById('editName').value = currentName;
-      document.getElementById('editGroup').value = currentGroup;
+      document.getElementById('editGroup').value = currentGroup || '';
+      document.getElementById('editGroupWrap').style.display = editUserRole === 'student' ? '' : 'none';
+      document.getElementById('editTeacherGroupsWrap').style.display = editUserRole === 'teacher' ? 'block' : 'none';
+      const editTeacherGroups = document.getElementById('editTeacherGroups');
+      Array.from(editTeacherGroups.options).forEach(opt => { opt.selected = false; });
+      const groupsArr = (currentGroupsStr || '').split(',').map(s => s.trim()).filter(Boolean);
+      groupsArr.forEach(g => {
+        const opt = Array.from(editTeacherGroups.options).find(o => o.value === g);
+        if (opt) opt.selected = true;
+      });
       document.getElementById('editUserModal').classList.add('show');
       document.getElementById('editName').focus();
     }
@@ -844,13 +881,24 @@
       const name = document.getElementById('editName').value.trim();
       const group = document.getElementById('editGroup').value.trim();
 
-      if (!name || !group) {
-        showMessage('Please fill in all fields', 'error');
+      if (!name) {
+        showMessage('Please fill in name', 'error');
+        return;
+      }
+      if (editUserRole === 'student' && !group) {
+        showMessage('Please select a group for the student', 'error');
         return;
       }
 
+      const payload = { name };
+      if (editUserRole === 'student') payload.group = group;
+      if (editUserRole === 'teacher') {
+        const editTeacherGroups = document.getElementById('editTeacherGroups');
+        payload.groups = Array.from(editTeacherGroups.selectedOptions).map(o => o.value).filter(Boolean);
+      }
+
       try {
-        const res = await apiPatch(`/users/${editUserId}`, { name, group });
+        const res = await apiPatch(`/users/${editUserId}`, payload);
         if (!res.ok) {
           const error = await res.json();
           showMessage(error.error || 'Failed to update user', 'error');
@@ -1000,6 +1048,9 @@
       document.getElementById('group').innerHTML = options;
       document.getElementById('editGroup').innerHTML = options;
       document.getElementById('uploadGroup').innerHTML = options;
+      const teacherOptions = groupsCache.map(g => `<option value="${escapeHtml(g.name)}">${escapeHtml(g.name)}</option>`).join('');
+      document.getElementById('teacherGroups').innerHTML = teacherOptions || '<option value="">No groups</option>';
+      document.getElementById('editTeacherGroups').innerHTML = teacherOptions || '<option value="">No groups</option>';
     }
 
     document.getElementById('addGroupForm').addEventListener('submit', async (e) => {
