@@ -96,7 +96,7 @@ const STAGES = [
 ];
 
 let config = { name: 'Teacher', group: 'Admin' };
-let state = { currentWeek: 1, totalWeeks: 1, activeTab: 'dashboard', selectedGroup: null, selectedStudent: null };
+let state = { currentWeek: 1, totalWeeks: 1, activeTab: 'dashboard', selectedGroup: null, selectedStudent: null, configGroupScope: 'all', configSelectedGroups: [] };
 let TD = { announcements: {}, weekConfigs: {} };
 
 // ===== AUTH & INIT =====
@@ -155,9 +155,65 @@ function saveState() {
   localStorage.setItem('dt-v4t', JSON.stringify(TD));
 }
 
+async function loadConfigFromAPI(week) {
+  try {
+    const r = await fetch('/api/teacher/config?week=' + week, { credentials: 'same-origin' });
+    if (r.ok) {
+      const data = await r.json();
+      const w = 'week' + week;
+      TD.weekConfigs[w] = {
+        openStages: data.openStages || ['empathize'],
+        announcement: data.announcement || '',
+        stages: data.stages || {}
+      };
+      if (!TD.weekConfigs[w].stages || Object.keys(TD.weekConfigs[w].stages).length === 0) {
+        STAGES.forEach(s => {
+          TD.weekConfigs[w].stages[s.id] = {
+            milestones: [
+              { id: mId(), name: 'Complete initial research', desc: 'Document at least 2 user interactions', weight: 30 },
+              { id: mId(), name: 'Visual documentation', desc: 'Upload photo evidence', weight: 20 },
+              { id: mId(), name: 'Team collaboration', desc: 'All members contribute', weight: 25 },
+              { id: mId(), name: 'Reflection', desc: 'Complete reflection', weight: 25 }
+            ],
+            rubric: 'Evaluate depth, evidence quality, collaboration, and critical thinking.'
+          };
+        });
+      }
+      state.configGroupScope = data.groupScope === 'all' ? 'all' : (Array.isArray(data.groupScope) ? 'selected' : 'all');
+      state.configSelectedGroups = Array.isArray(data.groupScope) ? data.groupScope : [];
+      return true;
+    }
+  } catch (e) { console.log('Load config failed:', e); }
+  return false;
+}
+
+async function saveConfigToAPI() {
+  const tc = gTC();
+  const groupScope = state.configGroupScope === 'all' ? 'all' : state.configSelectedGroups;
+  try {
+    const r = await fetch('/api/teacher/config', {
+      method: 'PUT',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        week: state.currentWeek,
+        groupScope,
+        openStages: tc.openStages,
+        announcement: tc.announcement,
+        stages: tc.stages
+      })
+    });
+    if (r.ok) { showToast('saved', '✓ Saved'); return; }
+    const err = await r.json();
+    showToast('error', err.error || 'Save failed');
+  } catch (e) {
+    showToast('error', 'Save failed');
+  }
+}
+
 function autoSave() {
   saveState();
-  showToast('saved', '✓ Saved');
+  saveConfigToAPI();
 }
 
 function showToast(t, m) {
@@ -210,6 +266,26 @@ function renderDashboard() {
       <button class="add-week-btn" onclick="addWeek()">+ New Week</button>
     </div>
 
+    <div class="teacher-card" id="applyToCard">
+      <h3>📌 Apply to</h3>
+      <p style="font-size:.82rem;color:var(--text-muted);margin-bottom:10px">Choose which groups receive this week's config (targets, stages, announcement).</p>
+      <div class="stage-toggle">
+        <label>
+          <input type="radio" name="applyTo" ${state.configGroupScope === 'all' ? 'checked' : ''} onchange="setApplyTo('all')" />
+          <span>All my groups</span>
+        </label>
+      </div>
+      <div class="stage-toggle">
+        <label>
+          <input type="radio" name="applyTo" ${state.configGroupScope !== 'all' ? 'checked' : ''} onchange="setApplyTo('selected')" />
+          <span>Selected groups</span>
+        </label>
+      </div>
+      <div id="selectedGroupsCheckboxes" style="margin-top:8px;margin-left:20px;display:${state.configGroupScope !== 'all' ? 'block' : 'none'};">
+        <p style="font-size:.8rem;color:var(--text-muted);margin-bottom:6px">Loading groups...</p>
+      </div>
+    </div>
+
     <div class="teacher-card">
       <h3>📢 Announcement</h3>
       <div class="t-input-group">
@@ -260,6 +336,41 @@ function renderDashboard() {
   `;
 
   document.getElementById('mainContent').innerHTML = html;
+  renderApplyToCheckboxes();
+}
+
+async function renderApplyToCheckboxes() {
+  const wrap = document.getElementById('selectedGroupsCheckboxes');
+  if (!wrap) return;
+  const groups = await fetchGroups();
+  const selected = state.configGroupScope === 'all' ? [] : (state.configSelectedGroups || []);
+  wrap.innerHTML = groups.length === 0
+    ? '<p style="font-size:.8rem;color:var(--text-muted)">No groups. Assign groups in Admin.</p>'
+    : groups.map(g => `
+        <div class="stage-toggle" style="margin-bottom:4px">
+          <label>
+            <input type="checkbox" ${selected.includes(g) ? 'checked' : ''} onchange="toggleConfigGroup('${esc(g)}', this.checked)" />
+            <span>${esc(g)}</span>
+          </label>
+        </div>
+      `).join('');
+}
+
+function setApplyTo(mode) {
+  state.configGroupScope = mode;
+  if (mode === 'all') state.configSelectedGroups = [];
+  autoSave();
+  renderDashboard();
+}
+
+function toggleConfigGroup(groupName, checked) {
+  if (state.configGroupScope === 'all') state.configGroupScope = 'selected';
+  state.configSelectedGroups = state.configSelectedGroups || [];
+  if (checked) state.configSelectedGroups.push(groupName);
+  else state.configSelectedGroups = state.configSelectedGroups.filter(g => g !== groupName);
+  state.configSelectedGroups = [...new Set(state.configSelectedGroups)];
+  autoSave();
+  renderDashboard();
 }
 
 function tcToggle(sid, c) {
@@ -291,10 +402,11 @@ function tcAM(sid) {
   renderDashboard();
 }
 
-function changeWeek(d) {
+async function changeWeek(d) {
   const n = state.currentWeek + d;
   if (n < 1 || n > state.totalWeeks) return;
   state.currentWeek = n;
+  await loadConfigFromAPI(state.currentWeek);
   gTC();
   if (state.activeTab === 'dashboard') renderDashboard();
 }
@@ -343,12 +455,12 @@ function selectGroup(groupName) {
   showGroupDetail(groupName);
 }
 
-function showGroupDetail(groupName) {
+async function showGroupDetail(groupName) {
   let html = `
     <button class="back-btn" onclick="backToGroups()">← Groups</button>
     <div class="map-header">
-      <h1>${groupName}</h1>
-      <p>View the group's collaborative work across all stages.</p>
+      <h1>${esc(groupName)}</h1>
+      <p>View the group's collaborative work across all stages (Week ${state.currentWeek}).</p>
     </div>
     <div id="groupDetailContent"></div>
   `;
@@ -356,31 +468,54 @@ function showGroupDetail(groupName) {
 
   const tc = gTC();
   const content = document.getElementById('groupDetailContent');
-
   content.innerHTML = tc.openStages.map(sid => {
     const s = STAGES.find(x => x.id === sid);
     return `
       <div class="teacher-card">
         <h3>${s.icon} ${s.name}</h3>
-        <div id="group-${sid}-blocks" style="font-size:.85rem;color:var(--text-muted)">Loading group work...</div>
+        <div id="group-${sid}-blocks" style="font-size:.85rem;color:var(--text-muted)">Loading...</div>
       </div>
     `;
   }).join('');
 
-  // Simulate group work display
-  tc.openStages.forEach(sid => {
-    const blockDiv = document.getElementById(`group-${sid}-blocks`);
-    blockDiv.innerHTML = `
-      <div class="read-only-block">
-        <div style="font-weight:700;margin-bottom:6px">📝 Group Research Notes</div>
-        <div class="block-content">We interviewed 3 users about their daily challenges with time management. Key findings: users struggle with context switching.</div>
-      </div>
-      <div class="read-only-block">
-        <div style="font-weight:700;margin-bottom:6px">📸 Evidence Photos</div>
-        <p style="font-size:.8rem;color:var(--text-muted)">2 photos uploaded</p>
-      </div>
-    `;
-  });
+  try {
+    const r = await fetch('/api/teacher/groups/' + encodeURIComponent(groupName) + '/work?week=' + state.currentWeek, { credentials: 'same-origin' });
+    if (!r.ok) {
+      tc.openStages.forEach(sid => {
+        const blockDiv = document.getElementById('group-' + sid + '-blocks');
+        if (blockDiv) blockDiv.innerHTML = '<p style="color:var(--text-muted)">Unable to load work.</p>';
+      });
+      return;
+    }
+    const byStage = await r.json();
+    tc.openStages.forEach(sid => {
+      const blockDiv = document.getElementById('group-' + sid + '-blocks');
+      if (!blockDiv) return;
+      const stageData = byStage[sid];
+      if (!stageData || !stageData.blocks || stageData.blocks.length === 0) {
+        if (stageData && stageData.reflection) {
+          blockDiv.innerHTML = '<div class="read-only-block"><div style="font-weight:700;margin-bottom:6px">🪞 Reflection</div><div class="block-content">' + esc(stageData.reflection) + '</div></div>';
+        } else {
+          blockDiv.innerHTML = '<p style="color:var(--text-muted)">No group work yet for this stage.</p>';
+        }
+        return;
+      }
+      let blocksHtml = stageData.blocks.map(b => {
+        const title = (b.title || b.type || 'Block');
+        const data = b.data || b.content || (Array.isArray(b.data) ? b.data.length + ' item(s)' : '');
+        return '<div class="read-only-block"><div style="font-weight:700;margin-bottom:6px">' + esc(title) + '</div><div class="block-content">' + (typeof data === 'string' ? esc(data) : esc(String(data))) + '</div></div>';
+      }).join('');
+      if (stageData.reflection) {
+        blocksHtml += '<div class="read-only-block"><div style="font-weight:700;margin-bottom:6px">🪞 Reflection</div><div class="block-content">' + esc(stageData.reflection) + '</div></div>';
+      }
+      blockDiv.innerHTML = blocksHtml;
+    });
+  } catch (e) {
+    tc.openStages.forEach(sid => {
+      const blockDiv = document.getElementById('group-' + sid + '-blocks');
+      if (blockDiv) blockDiv.innerHTML = '<p style="color:var(--text-muted)">Error loading work.</p>';
+    });
+  }
 }
 
 function backToGroups() {
@@ -446,7 +581,7 @@ function selectStudent(userId, name) {
   showStudentDetail(userId, name);
 }
 
-function showStudentDetail(userId, name) {
+async function showStudentDetail(userId, name) {
   let html = `
     <button class="back-btn" onclick="backToStudents()">← Students</button>
     <div class="map-header">
@@ -459,31 +594,54 @@ function showStudentDetail(userId, name) {
 
   const tc = gTC();
   const content = document.getElementById('studentDetailContent');
-
   content.innerHTML = tc.openStages.map(sid => {
     const s = STAGES.find(x => x.id === sid);
     return `
       <div class="teacher-card">
         <h3>${s.icon} ${s.name}</h3>
-        <div id="student-${sid}-work" style="font-size:.85rem;color:var(--text-muted)">Loading personal work...</div>
+        <div id="student-${sid}-work" style="font-size:.85rem;color:var(--text-muted)">Loading...</div>
       </div>
     `;
   }).join('');
 
-  // Simulate student personal work display
-  tc.openStages.forEach(sid => {
-    const workDiv = document.getElementById(`student-${sid}-work`);
-    workDiv.innerHTML = `
-      <div class="read-only-block">
-        <div style="font-weight:700;margin-bottom:6px">👤 Personal Notes</div>
-        <div class="block-content">I found the user's main pain point is keeping track of multiple projects. They need a simple way to visualize priorities.</div>
-      </div>
-      <div class="read-only-block">
-        <div style="font-weight:700;margin-bottom:6px">🪞 Reflection</div>
-        <div class="block-content">This stage helped me understand that empathy is about truly listening. I need to ask better follow-up questions next time.</div>
-      </div>
-    `;
-  });
+  try {
+    const r = await fetch('/api/teacher/students/' + encodeURIComponent(userId) + '/work?week=' + state.currentWeek, { credentials: 'same-origin' });
+    if (!r.ok) {
+      tc.openStages.forEach(sid => {
+        const workDiv = document.getElementById('student-' + sid + '-work');
+        if (workDiv) workDiv.innerHTML = '<p style="color:var(--text-muted)">Unable to load work.</p>';
+      });
+      return;
+    }
+    const byStage = await r.json();
+    tc.openStages.forEach(sid => {
+      const workDiv = document.getElementById('student-' + sid + '-work');
+      if (!workDiv) return;
+      const stageData = byStage[sid];
+      if (!stageData || !stageData.blocks || stageData.blocks.length === 0) {
+        if (stageData && stageData.reflection) {
+          workDiv.innerHTML = '<div class="read-only-block"><div style="font-weight:700;margin-bottom:6px">🪞 Reflection</div><div class="block-content">' + esc(stageData.reflection) + '</div></div>';
+        } else {
+          workDiv.innerHTML = '<p style="color:var(--text-muted)">No personal work yet for this stage.</p>';
+        }
+        return;
+      }
+      let blocksHtml = stageData.blocks.map(b => {
+        const title = (b.title || b.type || 'Block');
+        const data = b.data || b.content || (Array.isArray(b.data) ? b.data.length + ' item(s)' : '');
+        return '<div class="read-only-block"><div style="font-weight:700;margin-bottom:6px">' + esc(title) + '</div><div class="block-content">' + (typeof data === 'string' ? esc(data) : esc(String(data))) + '</div></div>';
+      }).join('');
+      if (stageData.reflection) {
+        blocksHtml += '<div class="read-only-block"><div style="font-weight:700;margin-bottom:6px">🪞 Reflection</div><div class="block-content">' + esc(stageData.reflection) + '</div></div>';
+      }
+      workDiv.innerHTML = blocksHtml;
+    });
+  } catch (e) {
+    tc.openStages.forEach(sid => {
+      const workDiv = document.getElementById('student-' + sid + '-work');
+      if (workDiv) workDiv.innerHTML = '<p style="color:var(--text-muted)">Error loading work.</p>';
+    });
+  }
 }
 
 function backToStudents() {
@@ -607,6 +765,8 @@ setInterval(() => {
     state.totalWeeks = 1;
     gTC();
   }
+  await loadConfigFromAPI(state.currentWeek);
+  gTC();
   renderMainTabs();
 })();
 </script>
