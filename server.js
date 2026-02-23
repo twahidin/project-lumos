@@ -6,6 +6,7 @@ const connectDB = require('./config/db');
 const authRoutes = require('./routes/auth');
 const adminRoutes = require('./routes/admin');
 const teacherRoutes = require('./routes/teacher');
+const studentRoutes = require('./routes/student');
 const { requireAuth, requireAdmin } = require('./middleware/auth');
 
 const app = express();
@@ -43,6 +44,7 @@ connectDB();
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/teacher', teacherRoutes);
+app.use('/api/student', studentRoutes);
 
 // Health check endpoint to verify deployment
 app.get('/api/health', (req, res) => {

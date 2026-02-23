@@ -46,4 +46,19 @@ function requireTeacherOrAdmin(req, res, next) {
     .catch(() => res.status(500).json({ error: 'Server error' }));
 }
 
-module.exports = { requireAuth, requireAdmin, requireTeacherOrAdmin };
+function requireStudent(req, res, next) {
+  if (!req.session?.userId) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  User.findById(req.session.userId)
+    .then(user => {
+      if (!user || user.role !== 'student') {
+        return res.status(403).json({ error: 'Student access required' });
+      }
+      req.user = user;
+      next();
+    })
+    .catch(() => res.status(500).json({ error: 'Server error' }));
+}
+
+module.exports = { requireAuth, requireAdmin, requireTeacherOrAdmin, requireStudent };
