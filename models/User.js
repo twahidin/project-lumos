@@ -38,4 +38,10 @@ userSchema.methods.comparePassword = function (candidate) {
   return bcrypt.compare(candidate, this.password);
 };
 
-module.exports = mongoose.model('User', userSchema);
+const User = mongoose.model('User', userSchema);
+
+// Drop stale indexes (e.g. old non-partial email_1 unique) and recreate from schema definition.
+// Prevents E11000 duplicate key errors when multiple students have no email.
+User.syncIndexes().catch(err => console.error('syncIndexes error (non-fatal):', err.message));
+
+module.exports = User;

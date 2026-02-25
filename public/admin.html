@@ -796,7 +796,7 @@
             <td>${escapeHtml(user.userid || user.email)}</td>
             <td>${escapeHtml(user.name)}</td>
             <td><span class="badge badge-${user.role}">${user.role}</span></td>
-            <td>${escapeHtml(user.role === 'student' ? (user.group || '-') : (Array.isArray(user.groups) ? user.groups.join(', ') : '-'))}</td>
+            <td>${escapeHtml(user.role === 'student' ? (user.group || '-') : (Array.isArray(user.groups) && user.groups.length ? user.groups.join(', ') : '-'))}</td>
             <td>
               <div class="actions-cell">
                 <button class="btn btn-secondary btn-small" onclick="openEditModal('${user._id}', '${escapeHtml(user.name)}', '${escapeHtml(user.group || '')}', '${user.role || 'student'}', '${escapeHtml((user.groups || []).join(','))}')">Edit</button>
