@@ -80,13 +80,22 @@ router.put('/work', async (req, res) => {
     const group = (req.user.group || '').trim();
 
     if (context === 'group') {
+      const authorName = req.user.name || '';
+      const existing = await GroupStageWork.findOne({ group, week: w, stageId: sid }).lean();
+
       const payload = {
         group,
         week: w,
         stageId: sid,
         updatedAt: new Date()
       };
-      if (blocks !== undefined) payload.blocks = Array.isArray(blocks) ? blocks : [];
+      if (blocks !== undefined) {
+        const incomingBlocks = Array.isArray(blocks) ? blocks : [];
+        const existingBlocks = (existing && Array.isArray(existing.blocks)) ? existing.blocks : [];
+        const otherBlocks = existingBlocks.filter(b => b.author !== authorName);
+        const myBlocks = incomingBlocks.filter(b => b.author === authorName);
+        payload.blocks = [...otherBlocks, ...myBlocks];
+      }
       if (reflection !== undefined) {
         payload.reflection = typeof reflection === 'string' ? reflection : '';
         payload.reflectionTime = new Date();

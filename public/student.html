@@ -356,9 +356,10 @@
         state.role = 'student';
         loadState();
         await loadConfigFromAPI(state.currentWeek);
-        await loadWorkFromAPI(state.currentWeek);
+        await loadWorkFromAPI(state.currentWeek, false);
         updateNav();
         renderStudentMap();
+        startGroupPolling();
       } catch(e) {
         console.error('Auth error:', e);
         window.location.href='/login.html';
@@ -432,19 +433,30 @@
       } catch(e) {console.error('Load config error:', e);}
     }
 
-    async function loadWorkFromAPI(week) {
+    async function loadWorkFromAPI(week, smartMerge) {
       try {
         const r = await fetch('/api/student/work?week=' + week, {credentials:'same-origin'});
-        if (!r.ok) return;
+        if (!r.ok) return false;
         const data = await r.json();
         if (!state.weeks[week]) state.weeks[week] = {};
         const groupByStage = data.group || {};
         const personalByStage = data.personal || {};
+        let changed = false;
         STAGES.forEach(s=>{
           const sid = s.id;
           if (!state.weeks[week][sid]) state.weeks[week][sid] = {open:true, blocks:[], reflection:'', personal:{}};
           if (groupByStage[sid]) {
-            state.weeks[week][sid].blocks = Array.isArray(groupByStage[sid].blocks) ? groupByStage[sid].blocks : [];
+            const serverBlocks = Array.isArray(groupByStage[sid].blocks) ? groupByStage[sid].blocks : [];
+            if (smartMerge) {
+              const localMyBlocks = (state.weeks[week][sid].blocks || []).filter(b => b.author === config.name);
+              const othersBlocks = serverBlocks.filter(b => b.author !== config.name);
+              const merged = [...othersBlocks, ...localMyBlocks];
+              const oldJSON = JSON.stringify(state.weeks[week][sid].blocks || []);
+              const newJSON = JSON.stringify(merged);
+              if (oldJSON !== newJSON) { state.weeks[week][sid].blocks = merged; changed = true; }
+            } else {
+              state.weeks[week][sid].blocks = serverBlocks;
+            }
             state.weeks[week][sid].reflection = groupByStage[sid].reflection || '';
           }
           if (personalByStage[sid]) {
@@ -453,7 +465,8 @@
             state.weeks[week][sid].personal[config.name].reflection = personalByStage[sid].reflection || '';
           }
         });
-      } catch(e) {console.error('Load work error:', e);}
+        return changed;
+      } catch(e) {console.error('Load work error:', e); return false;}
     }
 
     async function saveWorkToAPI(week, stageId, context, payload) {
@@ -493,7 +506,7 @@
         state.currentWeek = newWeek;
         initializeWeeks();
         await loadConfigFromAPI(state.currentWeek);
-        await loadWorkFromAPI(state.currentWeek);
+        await loadWorkFromAPI(state.currentWeek, false);
         if (state.currentStage) closeDetail();
         renderStudentMap();
       }
@@ -991,6 +1004,27 @@
 
     function mId() {
       return 'block_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    }
+
+    let pollTimer = null;
+    function startGroupPolling() {
+      if (pollTimer) clearInterval(pollTimer);
+      pollTimer = setInterval(async ()=>{
+        if (!state.currentStage) return;
+        const changed = await loadWorkFromAPI(state.currentWeek, true);
+        if (changed) {
+          saveState();
+          if (state.currentTab === 'group') renderGroupTab();
+          const syncDot = document.getElementById('syncDot');
+          const syncLabel = document.getElementById('syncLabel');
+          if (syncDot) syncDot.style.background = '#3b82f6';
+          if (syncLabel) syncLabel.textContent = 'Refreshed';
+          setTimeout(()=>{
+            if (syncDot) syncDot.style.background = '#10b981';
+            if (syncLabel) syncLabel.textContent = 'Synced';
+          }, 2000);
+        }
+      }, 10000);
     }
 
     function autoSave() {
