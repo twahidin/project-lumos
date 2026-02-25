@@ -433,9 +433,11 @@
       } catch(e) {console.error('Load config error:', e);}
     }
 
-    async function loadWorkFromAPI(week, smartMerge) {
+    async function loadWorkFromAPI(week, smartMerge, signal) {
       try {
-        const r = await fetch('/api/student/work?week=' + week, {credentials:'same-origin'});
+        const opts = {credentials:'same-origin'};
+        if (signal) opts.signal = signal;
+        const r = await fetch('/api/student/work?week=' + week, opts);
         if (!r.ok) return false;
         const data = await r.json();
         if (!state.weeks[week]) state.weeks[week] = {};
@@ -1007,23 +1009,28 @@
     }
 
     let pollTimer = null;
+    let pollAbort = null;
     function startGroupPolling() {
       if (pollTimer) clearInterval(pollTimer);
       pollTimer = setInterval(async ()=>{
         if (!state.currentStage) return;
-        const changed = await loadWorkFromAPI(state.currentWeek, true);
-        if (changed) {
-          saveState();
-          if (state.currentTab === 'group') renderGroupTab();
-          const syncDot = document.getElementById('syncDot');
-          const syncLabel = document.getElementById('syncLabel');
-          if (syncDot) syncDot.style.background = '#3b82f6';
-          if (syncLabel) syncLabel.textContent = 'Refreshed';
-          setTimeout(()=>{
-            if (syncDot) syncDot.style.background = '#10b981';
-            if (syncLabel) syncLabel.textContent = 'Synced';
-          }, 2000);
-        }
+        if (pollAbort) pollAbort.abort();
+        pollAbort = new AbortController();
+        try {
+          const changed = await loadWorkFromAPI(state.currentWeek, true, pollAbort.signal);
+          if (changed) {
+            saveState();
+            if (state.currentTab === 'group') renderGroupTab();
+            const syncDot = document.getElementById('syncDot');
+            const syncLabel = document.getElementById('syncLabel');
+            if (syncDot) syncDot.style.background = '#3b82f6';
+            if (syncLabel) syncLabel.textContent = 'Refreshed';
+            setTimeout(()=>{
+              if (syncDot) syncDot.style.background = '#10b981';
+              if (syncLabel) syncLabel.textContent = 'Synced';
+            }, 2000);
+          }
+        } catch(e) { if (e.name !== 'AbortError') console.error('Poll error:', e); }
       }, 10000);
     }
 

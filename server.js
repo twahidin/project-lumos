@@ -109,6 +109,12 @@ app.get('/admin.html', requireRole('admin'), (req, res) => {
 // Static files AFTER auth-guarded routes (so login.html, portal.html, CSS, JS are still public)
 app.use(express.static(publicDir));
 
+// Silently ignore "request aborted" errors (client closed connection before body was read)
+app.use((err, req, res, next) => {
+  if (err.type === 'request.aborted') return res.status(400).end();
+  next(err);
+});
+
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
